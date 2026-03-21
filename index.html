@@ -14,8 +14,6 @@ body{background:#0f172a;color:#f1f5f9;font-family:'Segoe UI',sans-serif;max-widt
 @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
-
-/* ── PIN SCREEN ── */
 .pin-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;animation:fadeIn .4s}
 .pin-logo{font-size:48px;margin-bottom:8px}
 .pin-title{font-size:22px;font-weight:900;margin-bottom:4px}
@@ -30,14 +28,7 @@ body{background:#0f172a;color:#f1f5f9;font-family:'Segoe UI',sans-serif;max-widt
 .pin-btn:active{background:#334155;transform:scale(.92)}
 .pin-btn.del{font-size:20px;background:transparent;color:#64748b}
 .pin-btn.empty{background:transparent;cursor:default}
-.pin-attempts{color:#F59E0B;font-size:12px;margin-top:16px;min-height:18px}
 .pin-blocked{color:#EF4444;font-size:13px;font-weight:700;margin-top:16px}
-
-/* ── CHANGE PIN MODAL ── */
-.change-pin-wrap{padding:8px 0}
-.change-pin-step{font-size:13px;color:#94a3b8;margin-bottom:12px}
-
-/* ── HEADER ── */
 header{background:#1e293b;padding:14px 16px 0;position:sticky;top:0;z-index:10;box-shadow:0 2px 12px rgba(0,0,0,.5)}
 .hrow{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px}
 h1{font-size:19px;font-weight:900;letter-spacing:-.5px}
@@ -48,14 +39,10 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.5px}
 .msel{flex:1;background:#0f172a;border:1px solid #334155;color:#f1f5f9;border-radius:8px;padding:7px 12px;font-weight:700;font-size:13px;cursor:pointer;text-align:left}
 .mnew{background:#1d4ed8;border:none;color:#fff;border-radius:8px;padding:7px 12px;font-weight:700;font-size:12px;cursor:pointer}
 .tabs{display:flex;gap:4px}
-.tab{flex:1;padding:8px 4px;background:transparent;border:none;color:#64748b;font-size:12px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s}
+.tab{flex:1;padding:8px 4px;background:transparent;border:none;color:#64748b;font-size:12px;font-weight:700;cursor:pointer;border-bottom:3px solid transparent}
 .tab.on{color:#3B82F6;border-bottom:3px solid #3B82F6}
-
-/* ── TOAST ── */
 .toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:#10B981;color:#fff;padding:8px 22px;border-radius:20px;font-size:13px;font-weight:700;z-index:999;pointer-events:none;animation:fadeIn .3s}
 .toast.err{background:#b45309}
-
-/* ── MAIN ── */
 main{padding:12px 12px 90px}
 .col{display:flex;flex-direction:column;gap:12px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -100,45 +87,67 @@ input,select{width:100%;background:#0f172a;border:1px solid #334155;border-radiu
 .b-can{flex:1;background:#334155;border:none;color:#94a3b8;border-radius:10px;padding:12px;font-weight:800;font-size:15px;cursor:pointer}
 .loader{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh}
 .spinner{width:44px;height:44px;border:4px solid #334155;border-top:4px solid #3B82F6;border-radius:50%;animation:spin 1s linear infinite}
-.hist-table{width:100%;border-collapse:collapse;font-size:12px}
 .sync-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle}
+
+/* ── ALIMENTATION ── */
+.alim-card{background:#1e293b;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.alim-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.alim-title{font-size:13px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:1px}
+.alim-add-btn{background:#065f46;border:none;color:#6ee7b7;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.alim-jauge{margin-bottom:12px}
+.alim-pb{border-radius:8px;height:14px;overflow:hidden;margin-bottom:6px;background:#334155}
+.alim-pf{height:100%;border-radius:8px;transition:width .5s}
+.alim-chiffres{display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px}
+.alim-reste{text-align:center;font-size:18px;font-weight:900;margin:8px 0 4px}
+.alim-reste-label{text-align:center;font-size:11px;color:#94a3b8;margin-bottom:12px}
+.alim-courses{border-top:1px solid #1e3a5f;padding-top:10px;margin-top:4px}
+.alim-courses-title{font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.alim-course-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #0f172a}
+.alim-course-date{font-size:11px;color:#64748b}
+.alim-course-label{font-size:13px;color:#cbd5e1;font-weight:600;flex:1;margin:0 8px}
+.alim-course-mnt{font-size:13px;font-weight:700;color:#F59E0B}
+.alim-course-del{background:transparent;border:none;color:#475569;font-size:13px;cursor:pointer;padding:0 2px}
 </style>
 </head>
 <body>
 <div id="root"></div>
 <script>
-// ── CONFIG ────────────────────────────────────────────────────────────────────
-const GAS_URL = "https://script.google.com/macros/s/AKfycby0_v0SAuFnxUGBLPo4XzTYDy5Z0Hsnltao6pcZgTFS06X06KhFzy-jndgvHTEQpduH/exec";
-const PIN_KEY        = "bf-pin";
-const PIN_AUTH_KEY   = "bf-pin-auth";
-const PIN_TRIES_KEY  = "bf-pin-tries";
-const PIN_BLOCK_KEY  = "bf-pin-block";
-const DEFAULT_PIN    = "7369";
-const AUTH_DURATION  = 8 * 60 * 60 * 1000; // 8 heures
-const MAX_TRIES      = 3;
-const BLOCK_DURATION = 30 * 1000; // 30 secondes
+const GAS_URL="https://script.google.com/macros/s/AKfycby0_v0SAuFnxUGBLPo4XzTYDy5Z0Hsnltao6pcZgTFS06X06KhFzy-jndgvHTEQpduH/exec";
+const PIN_KEY="bf-pin",PIN_AUTH_KEY="bf-pin-auth",PIN_TRIES_KEY="bf-pin-tries",PIN_BLOCK_KEY="bf-pin-block";
+const DEFAULT_PIN="7369",AUTH_DURATION=30*60*1000,MAX_TRIES=3,BLOCK_DURATION=30*1000;
+const CATEGORIES_BASE=["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
+const CAT_COLORS_EXTRA=["#6366f1","#0ea5e9","#d946ef","#f97316","#14b8a6","#a855f7","#eab308","#78716c"];
+function getCats(){try{const v=localStorage.getItem("bf-cats");if(v)return JSON.parse(v);}catch{}return[...CATEGORIES_BASE];}
+function saveCats(cats){localStorage.setItem("bf-cats",JSON.stringify(cats));}
+const CAT_COLORS={logement:"#3B82F6",assurances:"#10B981",abonnements:"#8B5CF6","crédits":"#EF4444","vie courante":"#F59E0B",transport:"#06B6D4",enfants:"#EC4899",animaux:"#84CC16",autre:"#9CA3AF"};
+function getCatColor(cat){return CAT_COLORS[cat]||(CAT_COLORS_EXTRA[getCats().indexOf(cat)%CAT_COLORS_EXTRA.length]||"#9CA3AF");}
+function addCustomCat(nom){
+  const n=nom.trim().toLowerCase();if(!n)return false;
+  const cats=getCats();if(cats.includes(n))return false;
+  cats.push(n);saveCats(cats);return true;
+}
+function delCustomCat(nom){
+  const cats=getCats().filter(c=>CATEGORIES_BASE.includes(c)||c!==nom);saveCats(cats);
+}
+const MOIS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+const fmt=n=>(parseFloat(n)||0).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
+const nowKey=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;};
+const keyLabel=k=>{const[y,m]=k.split("-");return `${MOIS[+m-1]} ${y}`;};
+const uid=()=>"x"+Date.now()+Math.random().toString(36).slice(2);
+const todayStr=()=>{const d=new Date();return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;};
 
-const CATEGORIES = ["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
-const CAT_COLORS = {logement:"#3B82F6",assurances:"#10B981",abonnements:"#8B5CF6","crédits":"#EF4444","vie courante":"#F59E0B",transport:"#06B6D4",enfants:"#EC4899",animaux:"#84CC16",autre:"#9CA3AF"};
-const MOIS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
-const fmt = n => (parseFloat(n)||0).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
-const nowKey = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; };
-const keyLabel = k => { const [y,m]=k.split("-"); return `${MOIS[+m-1]} ${y}`; };
-const uid = () => "x"+Date.now()+Math.random().toString(36).slice(2);
+// PIN
+function getPin(){return localStorage.getItem(PIN_KEY)||DEFAULT_PIN;}
+function setPin(p){localStorage.setItem(PIN_KEY,p);}
+function isAuthed(){const t=localStorage.getItem(PIN_AUTH_KEY);return t&&Date.now()-parseInt(t)<AUTH_DURATION;}
+function setAuthed(){localStorage.setItem(PIN_AUTH_KEY,String(Date.now()));}
+function getTries(){return parseInt(localStorage.getItem(PIN_TRIES_KEY)||"0");}
+function setTries(n){localStorage.setItem(PIN_TRIES_KEY,String(n));}
+function getBlockUntil(){return parseInt(localStorage.getItem(PIN_BLOCK_KEY)||"0");}
+function setBlock(){localStorage.setItem(PIN_BLOCK_KEY,String(Date.now()+BLOCK_DURATION));}
+function clearBlock(){localStorage.removeItem(PIN_BLOCK_KEY);localStorage.removeItem(PIN_TRIES_KEY);}
 
-// ── PIN HELPERS ───────────────────────────────────────────────────────────────
-function getPin()       { return localStorage.getItem(PIN_KEY) || DEFAULT_PIN; }
-function setPin(p)      { localStorage.setItem(PIN_KEY, p); }
-function isAuthed()     { const t=localStorage.getItem(PIN_AUTH_KEY); return t && Date.now()-parseInt(t)<AUTH_DURATION; }
-function setAuthed()    { localStorage.setItem(PIN_AUTH_KEY, String(Date.now())); }
-function getTries()     { return parseInt(localStorage.getItem(PIN_TRIES_KEY)||"0"); }
-function setTries(n)    { localStorage.setItem(PIN_TRIES_KEY, String(n)); }
-function getBlockUntil(){ return parseInt(localStorage.getItem(PIN_BLOCK_KEY)||"0"); }
-function setBlock()     { localStorage.setItem(PIN_BLOCK_KEY, String(Date.now()+BLOCK_DURATION)); }
-function clearBlock()   { localStorage.removeItem(PIN_BLOCK_KEY); localStorage.removeItem(PIN_TRIES_KEY); }
-
-// ── BASE DATA ─────────────────────────────────────────────────────────────────
-const BASE = [
+const BASE=[
   {type:"Loyer",montant:929.99,categorie:"logement"},{type:"Gaz",montant:200.00,categorie:"logement"},
   {type:"Électricité",montant:70.00,categorie:"logement"},{type:"Assurance Habitation",montant:19.50,categorie:"assurances"},
   {type:"Assurance Auto",montant:50.27,categorie:"assurances"},{type:"Box SFR",montant:59.99,categorie:"abonnements"},
@@ -153,67 +162,65 @@ const BASE = [
   {type:"Croquettes",montant:48.48,categorie:"animaux"},{type:"Store porte",montant:34.99,categorie:"logement"},
   {type:"Ikéa",montant:74.58,categorie:"logement"},
 ];
+
 function makeMonth(srcDeps,srcMonth){
   return {
-    salaires: srcMonth?JSON.parse(JSON.stringify(srcMonth.salaires)):[{id:uid(),prenom:"Murielle",montant:1654.82},{id:uid(),prenom:"Gilles",montant:3048.64}],
-    depenses: (srcDeps||BASE).map(d=>({...d,id:uid(),paye:false})),
-    economies: srcMonth?JSON.parse(JSON.stringify(srcMonth.economies)).map(e=>({...e,id:uid()})):[{id:uid(),type:"Vacances / Mariage / Voiture",montant:250}],
-    argentPoche: srcMonth?JSON.parse(JSON.stringify(srcMonth.argentPoche)):[{id:uid(),prenom:"Murielle",montant:392.24},{id:uid(),prenom:"Gilles",montant:392.24}],
+    salaires:srcMonth?JSON.parse(JSON.stringify(srcMonth.salaires)):[{id:uid(),prenom:"Murielle",montant:1654.82},{id:uid(),prenom:"Gilles",montant:3048.64}],
+    depenses:(srcDeps||BASE).map(d=>({...d,id:uid(),paye:false})),
+    economies:srcMonth?JSON.parse(JSON.stringify(srcMonth.economies)).map(e=>({...e,id:uid()})):[{id:uid(),type:"Vacances / Mariage / Voiture",montant:250}],
+    argentPoche:srcMonth?JSON.parse(JSON.stringify(srcMonth.argentPoche)):[{id:uid(),prenom:"Murielle",montant:392.24},{id:uid(),prenom:"Gilles",montant:392.24}],
+    courses:[], // [{id, date, label, montant}]
   };
 }
 
-// ── STORAGE ───────────────────────────────────────────────────────────────────
+// Storage
 let _saveTimer=null;
 const DB={
   async load(){
-    try{ const r=await fetch(GAS_URL,{redirect:"follow"}); const t=await r.text(); if(t&&t.trim().startsWith("{"))return JSON.parse(t); }catch{}
-    try{ const v=localStorage.getItem("bf-local"); if(v)return JSON.parse(v); }catch{}
+    try{const r=await fetch(GAS_URL,{redirect:"follow"});const t=await r.text();if(t&&t.trim().startsWith("{"))return JSON.parse(t);}catch{}
+    try{const v=localStorage.getItem("bf-local");if(v)return JSON.parse(v);}catch{}
     return null;
   },
   save(data){
     try{localStorage.setItem("bf-local",JSON.stringify(data));}catch{}
-    clearTimeout(_saveTimer);
-    _saveTimer=setTimeout(()=>DB._send(data),800);
+    clearTimeout(_saveTimer);_saveTimer=setTimeout(()=>DB._send(data),800);
   },
-  async _send(data){
-    try{ await fetch(GAS_URL,{method:"POST",body:JSON.stringify(data),headers:{"Content-Type":"text/plain"}}); }catch{}
-  }
+  async _send(data){try{await fetch(GAS_URL,{method:"POST",body:JSON.stringify(data),headers:{"Content-Type":"text/plain"}});}catch{}}
 };
 
-// ── STATE ─────────────────────────────────────────────────────────────────────
+// STATE
 let STATE={
-  screen:"pin", // "pin" | "app"
-  pinInput:"",
-  pinError:"",
-  pinShake:false,
-  pinBlocked:false,
-  pinBlockLeft:0,
-  changePinStep:0, // 0=off 1=ancien 2=nouveau 3=confirm
-  changePinOld:"",changePinNew:"",changePinInput:"",changePinError:"",
-  months:{},curKey:nowKey(),tab:"dashboard",
-  loading:true,syncing:false,lastSync:null,
-  modal:null,filtre:"toutes",monthPick:false,
-  toast:null,toastTimer:null,
+  screen:"pin",pinInput:"",pinError:"",pinShake:false,pinBlocked:false,pinBlockLeft:0,
+  changePinStep:0,changePinOld:"",changePinNew:"",changePinInput:"",changePinError:"",
+  months:{},curKey:nowKey(),tab:"dashboard",loading:true,lastSync:null,
+  modal:null,filtre:"toutes",monthPick:false,toast:null,toastTimer:null,
 };
 function setState(p){Object.assign(STATE,p);render();}
-function notify(msg,err=false){
-  clearTimeout(STATE.toastTimer);
-  const t=setTimeout(()=>setState({toast:null}),2800);
-  setState({toast:{msg,err},toastTimer:t});
-}
+function notify(msg,err=false){clearTimeout(STATE.toastTimer);const t=setTimeout(()=>setState({toast:null}),2800);setState({toast:{msg,err},toastTimer:t});}
 function persist(months){DB.save(months);setState({months,lastSync:new Date()});notify("✓ Synchronisé");}
 function updCur(fn){const m=fn(STATE.months[STATE.curKey]);const next={...STATE.months,[STATE.curKey]:m};persist(next);}
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
 async function init(){
   setState({loading:true});
   const data=await DB.load();
-  if(data&&Object.keys(data).length>0){setState({months:data,loading:false,lastSync:new Date()});}
-  else{const k=nowKey();const init={[k]:makeMonth()};setState({months:init,loading:false,lastSync:new Date()});DB.save(init);}
-  setInterval(async()=>{const d=await DB.load();if(d&&Object.keys(d).length>0)setState({months:d,lastSync:new Date()});},15000);
+  if(data&&Object.keys(data).length>0){
+    // migration : ajouter courses si absent
+    Object.keys(data).forEach(k=>{if(!data[k].courses)data[k].courses=[];});
+    setState({months:data,loading:false,lastSync:new Date()});
+  } else {
+    const k=nowKey();const init={[k]:makeMonth()};
+    setState({months:init,loading:false,lastSync:new Date()});DB.save(init);
+  }
+  setInterval(async()=>{
+    const d=await DB.load();
+    if(d&&Object.keys(d).length>0){
+      Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});
+      setState({months:d,lastSync:new Date()});
+    }
+  },15000);
 }
 
-// ── ACTIONS ───────────────────────────────────────────────────────────────────
+// Actions
 function togglePaye(id){updCur(m=>({...m,depenses:m.depenses.map(d=>d.id===id?{...d,paye:!d.paye}:d)}));}
 function saveItem(type,item){
   const u={...item,montant:parseFloat(item.montant)||0};
@@ -234,31 +241,45 @@ function addItem(type,item){
   if(type==="economie") updCur(m=>({...m,economies:[...m.economies,u]}));
   setState({modal:null});
 }
+
+// Courses alimentation
+function addCourse(label,montant){
+  const mnt=parseFloat(montant)||0;
+  if(!mnt)return;
+  setMonthsAndRender(m=>({...m,courses:[...(m.courses||[]),{id:uid(),date:todayStr(),label:label||"Courses",montant:mnt}]}));
+  setState({modal:null});
+}
+function delCourse(id){
+  setMonthsAndRender(m=>({...m,courses:(m.courses||[]).filter(c=>c.id!==id)}));
+}
+// Mise à jour immédiate + sync
+function setMonthsAndRender(fn){
+  const newMonth=fn(STATE.months[STATE.curKey]);
+  const next={...STATE.months,[STATE.curKey]:newMonth};
+  DB.save(next);
+  STATE.months=next;
+  STATE.lastSync=new Date();
+  render();
+  notify("✓ Synchronisé");
+}
+
 async function createMonth(key,copyKey){
   if(STATE.months[key]){setState({curKey:key,modal:null,monthPick:false});return;}
   const src=copyKey&&STATE.months[copyKey]?STATE.months[copyKey]:null;
   const nm=makeMonth(src?.depenses,src);
-  const next={...STATE.months,[key]:nm};
-  persist(next);setState({curKey:key,modal:null,monthPick:false});
-  notify("✓ Mois créé !");
+  const next={...STATE.months,[key]:nm};persist(next);
+  setState({curKey:key,modal:null,monthPick:false});notify("✓ Mois créé !");
 }
 
-// ── PIN LOGIC ─────────────────────────────────────────────────────────────────
+// PIN logic
 function handlePinDigit(d){
   if(STATE.pinBlocked)return;
-  const val=STATE.pinInput+d;
-  setState({pinInput:val,pinError:""});
+  const val=STATE.pinInput+d;setState({pinInput:val,pinError:""});
   if(val.length===4){
-    const blocked=getBlockUntil();
-    if(Date.now()<blocked){setState({pinBlocked:true,pinInput:""});startBlockTimer();return;}
-    if(val===getPin()){
-      clearBlock();setAuthed();
-      setState({screen:"app",pinInput:"",pinError:""});
-      init();
-    } else {
-      const tries=getTries()+1;
-      setTries(tries);
-      const left=MAX_TRIES-tries;
+    if(Date.now()<getBlockUntil()){setState({pinBlocked:true,pinInput:""});startBlockTimer();return;}
+    if(val===getPin()){clearBlock();setAuthed();setState({screen:"app",pinInput:"",pinError:""});init();}
+    else{
+      const tries=getTries()+1;setTries(tries);const left=MAX_TRIES-tries;
       if(tries>=MAX_TRIES){setBlock();clearBlock();setState({pinInput:"",pinError:"",pinShake:true,pinBlocked:true});startBlockTimer();setTimeout(()=>setState({pinShake:false}),500);}
       else{setState({pinInput:"",pinError:`Code incorrect — ${left} essai${left>1?"s":""} restant${left>1?"s":""}`,pinShake:true});setTimeout(()=>setState({pinShake:false}),500);}
     }
@@ -266,33 +287,20 @@ function handlePinDigit(d){
 }
 function handlePinDel(){setState({pinInput:STATE.pinInput.slice(0,-1),pinError:""});}
 function startBlockTimer(){
-  const tick=()=>{
-    const left=Math.ceil((getBlockUntil()-Date.now())/1000);
-    if(left<=0){clearBlock();setState({pinBlocked:false,pinBlockLeft:0,pinError:""});}
-    else{setState({pinBlockLeft:left});setTimeout(tick,1000);}
-  };tick();
+  const tick=()=>{const left=Math.ceil((getBlockUntil()-Date.now())/1000);if(left<=0){clearBlock();setState({pinBlocked:false,pinBlockLeft:0,pinError:""});}else{setState({pinBlockLeft:left});setTimeout(tick,1000);}};tick();
 }
-
-// ── CHANGE PIN ────────────────────────────────────────────────────────────────
 function handleChangePinDigit(d){
   if(STATE.changePinStep===0)return;
-  const val=STATE.changePinInput+d;
-  setState({changePinInput:val,changePinError:""});
+  const val=STATE.changePinInput+d;setState({changePinInput:val,changePinError:""});
   if(val.length===4){
-    if(STATE.changePinStep===1){
-      if(val===getPin()){setState({changePinStep:2,changePinOld:val,changePinInput:""});}
-      else{setState({changePinInput:"",changePinError:"Code actuel incorrect"});}
-    } else if(STATE.changePinStep===2){
-      setState({changePinStep:3,changePinNew:val,changePinInput:""});
-    } else if(STATE.changePinStep===3){
-      if(val===STATE.changePinNew){setPin(val);setState({changePinStep:0,changePinInput:"",changePinError:"",modal:null});notify("✓ Code PIN modifié !");}
-      else{setState({changePinInput:"",changePinError:"Les codes ne correspondent pas"});}
-    }
+    if(STATE.changePinStep===1){if(val===getPin()){setState({changePinStep:2,changePinOld:val,changePinInput:""});}else setState({changePinInput:"",changePinError:"Code actuel incorrect"});}
+    else if(STATE.changePinStep===2){setState({changePinStep:3,changePinNew:val,changePinInput:""});}
+    else if(STATE.changePinStep===3){if(val===STATE.changePinNew){setPin(val);setState({changePinStep:0,changePinInput:"",changePinError:"",modal:null});notify("✓ Code PIN modifié !");}else setState({changePinInput:"",changePinError:"Les codes ne correspondent pas"});}
   }
 }
 function handleChangePinDel(){setState({changePinInput:STATE.changePinInput.slice(0,-1),changePinError:""});}
 
-// ── RENDER ────────────────────────────────────────────────────────────────────
+// Render helpers
 function el(tag,attrs={},...ch){
   const e=document.createElement(tag);
   for(const[k,v]of Object.entries(attrs)){if(k==="className")e.className=v;else if(k.startsWith("on"))e[k.toLowerCase()]=v;else e.setAttribute(k,v);}
@@ -300,58 +308,40 @@ function el(tag,attrs={},...ch){
   return e;
 }
 function div(cls,...ch){return el("div",{className:cls},...ch);}
-function btn(cls,txt,onClick){const b=el("button",{className:cls});b.textContent=txt;b.onclick=onClick;return b;}
 function inp(type,val,onChange,ph=""){const i=el("input",{type,value:val||"",placeholder:ph});i.oninput=e=>onChange(e.target.value);return i;}
 function sel(val,opts,onChange){const s=el("select",{});s.onchange=e=>onChange(e.target.value);opts.forEach(o=>{const op=el("option",{value:o});op.textContent=o;if(o===val)op.selected=true;s.appendChild(op);});return s;}
 
 function render(){
-  const root=document.getElementById("root");
-  root.innerHTML="";
+  const root=document.getElementById("root");root.innerHTML="";
   if(STATE.screen==="pin"){root.appendChild(renderPin());return;}
   if(STATE.loading){root.appendChild(div("loader",div("spinner"),el("p",{style:"color:#94a3b8;margin-top:14px"},"Chargement…")));return;}
   root.appendChild(renderApp());
 }
 
-// ── PIN SCREEN ────────────────────────────────────────────────────────────────
+// PIN SCREEN
 function renderPin(){
-  const blocked=STATE.pinBlocked;
   const wrap=div("pin-screen");
   if(STATE.pinShake)wrap.style.animation="shake .4s";
-  wrap.append(
-    el("div",{className:"pin-logo"},"💶"),
-    el("h2",{className:"pin-title"},"Budget Familial"),
-    el("p",{className:"pin-sub"},"Entrez votre code PIN"),
-  );
+  wrap.append(el("div",{className:"pin-logo"},"💶"),el("h2",{className:"pin-title"},"Budget Familial"),el("p",{className:"pin-sub"},"Entrez votre code PIN"));
   const dots=div("pin-dots");
-  for(let i=0;i<4;i++){
-    const d=div("pin-dot");
-    if(STATE.pinInput.length>i)d.classList.add(STATE.pinError?"error":"filled");
-    dots.appendChild(d);
-  }
+  for(let i=0;i<4;i++){const d=div("pin-dot");if(STATE.pinInput.length>i)d.classList.add(STATE.pinError?"error":"filled");dots.appendChild(d);}
   wrap.appendChild(dots);
-  const errEl=el("p",{className:"pin-error"});errEl.textContent=STATE.pinError||"";
-  wrap.appendChild(errEl);
-  if(blocked){
-    const bl=el("p",{className:"pin-blocked"});
-    bl.textContent=`🔒 Bloqué — réessayez dans ${STATE.pinBlockLeft}s`;
-    wrap.appendChild(bl);
-  } else {
+  const err=el("p",{className:"pin-error"});err.textContent=STATE.pinError||"";wrap.appendChild(err);
+  if(STATE.pinBlocked){const bl=el("p",{className:"pin-blocked"});bl.textContent=`🔒 Bloqué — réessayez dans ${STATE.pinBlockLeft}s`;wrap.appendChild(bl);}
+  else{
     const grid=div("pin-grid");
     ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
       if(d===""){grid.appendChild(div("pin-btn empty"));return;}
-      const b=div("pin-btn"+(d==="⌫"?" del":""));
-      b.textContent=d;
-      b.onclick=()=>d==="⌫"?handlePinDel():handlePinDigit(d);
-      grid.appendChild(b);
+      const b=div("pin-btn"+(d==="⌫"?" del":""));b.textContent=d;b.onclick=()=>d==="⌫"?handlePinDel():handlePinDigit(d);grid.appendChild(b);
     });
     wrap.appendChild(grid);
   }
   return wrap;
 }
 
-// ── APP ───────────────────────────────────────────────────────────────────────
+// APP
 function renderApp(){
-  const {months,curKey,tab,lastSync,toast,modal,monthPick}=STATE;
+  const{months,curKey,tab,lastSync,toast,modal,monthPick}=STATE;
   const data=months[curKey]||makeMonth();
   const allKeys=Object.keys(months).sort().reverse();
   const totSal=data.salaires.reduce((a,x)=>a+(+x.montant||0),0);
@@ -365,19 +355,14 @@ function renderApp(){
   const hdr=el("header",{});
   const hrow=div("hrow");
   const tWrap=div("");
-  const h1=el("h1",{},"💶 Budget Familial");
   const si=div("sync-info");
   si.innerHTML=`<span class="sync-dot" style="background:${lastSync?"#10B981":"#EF4444"}"></span>${lastSync?"Sync "+lastSync.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"Non sync"}`;
-  tWrap.append(h1,si);
+  tWrap.append(el("h1",{},"💶 Budget Familial"),si);
   const hbtns=div("hbtns");
-  const lockBtn=el("button",{className:"icon-btn",title:"Verrouiller"});lockBtn.textContent="🔒";
-  lockBtn.onclick=()=>{localStorage.removeItem(PIN_AUTH_KEY);setState({screen:"pin",pinInput:"",pinError:""});};
-  const pinBtn=el("button",{className:"icon-btn",title:"Changer PIN"});pinBtn.textContent="🔑";
-  pinBtn.onclick=()=>setState({modal:{type:"changePin"},changePinStep:1,changePinInput:"",changePinError:""});
-  const refBtn=el("button",{className:"icon-btn",title:"Actualiser"});refBtn.textContent="⟳";
-  refBtn.onclick=async()=>{const d=await DB.load();if(d&&Object.keys(d).length>0){setState({months:d,lastSync:new Date()});notify("✓ Actualisé");}};
-  hbtns.append(lockBtn,pinBtn,refBtn);
-  hrow.append(tWrap,hbtns);
+  const lockB=el("button",{className:"icon-btn",title:"Verrouiller"});lockB.textContent="🔒";lockB.onclick=()=>{localStorage.removeItem(PIN_AUTH_KEY);setState({screen:"pin",pinInput:"",pinError:""});};
+  const pinB=el("button",{className:"icon-btn",title:"Changer PIN"});pinB.textContent="🔑";pinB.onclick=()=>setState({modal:{type:"changePin"},changePinStep:1,changePinInput:"",changePinError:""});
+  const refB=el("button",{className:"icon-btn",title:"Actualiser"});refB.textContent="⟳";refB.onclick=async()=>{const d=await DB.load();if(d&&Object.keys(d).length>0){Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});setState({months:d,lastSync:new Date()});notify("✓ Actualisé");}};
+  hbtns.append(lockB,pinB,refB);hrow.append(tWrap,hbtns);
   const mbar=div("mbar");
   const mselB=el("button",{className:"msel"});mselB.textContent=`📅 ${keyLabel(curKey)} ▾`;mselB.onclick=()=>setState({monthPick:!STATE.monthPick});
   const mnewB=el("button",{className:"mnew"});mnewB.textContent="+ Mois";mnewB.onclick=()=>setState({modal:{type:"newMonth"}});
@@ -386,8 +371,7 @@ function renderApp(){
   [["dashboard","📊 Résumé"],["depenses","💸 Dépenses"],["historique","📈 Historique"]].forEach(([id,l])=>{
     const t=el("button",{className:"tab"+(tab===id?" on":"")});t.textContent=l;t.onclick=()=>setState({tab:id});tabs.appendChild(t);
   });
-  hdr.append(hrow,mbar,tabs);
-  wrap.appendChild(hdr);
+  hdr.append(hrow,mbar,tabs);wrap.appendChild(hdr);
 
   if(monthPick){
     const ol=div("overlay2");ol.onclick=()=>setState({monthPick:false});
@@ -407,37 +391,47 @@ function renderApp(){
   return wrap;
 }
 
-// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+// DASHBOARD
 function renderDashboard(data,totSal,totDep,totEco,paye,solde){
   const pct=totDep>0?Math.round((paye/totDep)*100):0;
   const byCat={};data.depenses.forEach(d=>{byCat[d.categorie]=(byCat[d.categorie]||0)+(+d.montant||0);});
   const murSal=data.salaires.find(x=>x.prenom==="Murielle")?.montant||0;
   const murPoche=data.argentPoche.find(x=>x.prenom==="Murielle")?.montant||0;
   const col=div("col");
+
+  // Kartes
   const g2=div("grid2");
   [[totSal,"Salaires","💰","#10B981"],[totDep,"Dépenses","💸","#EF4444"],[totEco,"Épargne","🏦","#F59E0B"],[solde,"Solde","⚖️",solde>=0?"#3B82F6":"#EF4444"]].forEach(([v,l,i,c])=>{
     const k=div("kard");k.style.cssText=`border-left:4px solid ${c};background:#1e293b;box-shadow:0 2px 8px rgba(0,0,0,.3)`;
     k.innerHTML=`<div style="font-size:22px">${i}</div><div style="color:#94a3b8;font-size:12px;margin-top:4px">${l}</div><div style="color:#f1f5f9;font-size:17px;font-weight:800;margin-top:2px">${fmt(v)}</div>`;
     g2.appendChild(k);
-  });
-  col.appendChild(g2);
+  });col.appendChild(g2);
+
+  // Progress
   const pc=div("card");const pf=div("pf");pf.style.width=pct+"%";const pb=div("pb");pb.appendChild(pf);
   const pl=div("plbl");pl.innerHTML=`<span style="color:#10B981">Payé : ${fmt(paye)}</span><span style="color:#94a3b8">${pct}%</span><span style="color:#EF4444">Restant : ${fmt(totDep-paye)}</span>`;
   pc.append(el("h3",{className:"ct"},"Paiements du mois"),pb,pl);col.appendChild(pc);
+
+  // ── ALIMENTATION ──
+  col.appendChild(renderAlimentationCard(data));
+
+  // Répartition
   const rc=div("card");rc.appendChild(el("h3",{className:"ct"},"Répartition"));
   Object.entries(byCat).sort((a,b)=>b[1]-a[1]).forEach(([cat,mnt])=>{
-    const r=div("crow");const dot=div("cdot");dot.style.background=CAT_COLORS[cat]||"#9CA3AF";
+    const r=div("crow");const dot=div("cdot");dot.style.background=getCatColor(cat);
     const lbl=el("span",{className:"clbl"});lbl.textContent=cat;
-    const bar=div("cbar");const fill=div("cfill");fill.style.cssText=`width:${Math.round((mnt/totDep)*100)}%;background:${CAT_COLORS[cat]||"#9CA3AF"}`;
+    const bar=div("cbar");const fill=div("cfill");fill.style.cssText=`width:${Math.round((mnt/totDep)*100)}%;background:${getCatColor(cat)}`;
     bar.appendChild(fill);const val=el("span",{className:"cval"});val.textContent=fmt(mnt);
     r.append(dot,lbl,bar,val);rc.appendChild(r);
   });col.appendChild(rc);
+
   // Salaires
   const sc=div("card");sc.appendChild(el("h3",{className:"ct"},"Salaires"));
   data.salaires.forEach(x=>{const li=div("li");li.append(el("span",{style:"color:#cbd5e1"},x.prenom),iedit(fmt(x.montant),"#10B981",()=>setState({modal:{type:"edit",itemType:"salaire",item:{...x}}})));sc.appendChild(li);});
   const st=div("li");st.style.cssText="border-top:1px solid #334155;margin-top:6px;padding-top:10px;border-bottom:none";
   st.innerHTML=`<span style="color:#94a3b8;font-weight:700">Total</span><span style="color:#10B981;font-weight:800;font-size:16px">${fmt(totSal)}</span>`;
   sc.appendChild(st);col.appendChild(sc);
+
   // Épargne
   const ec=div("card");
   const eh=div("");eh.style.cssText="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px";
@@ -448,14 +442,70 @@ function renderDashboard(data,totSal,totDep,totEco,paye,solde){
   data.economies.forEach(x=>{const li=div("li");const lb=el("span",{style:"font-size:13px;color:#cbd5e1;flex:1;margin-right:8px"});lb.textContent=x.type;li.append(lb,iedit(fmt(x.montant),"#F59E0B",()=>setState({modal:{type:"edit",itemType:"economie",item:{...x}}})));ec.appendChild(li);});
   if(data.economies.length){const et2=div("li");et2.style.cssText="border-top:1px solid #334155;margin-top:6px;padding-top:10px;border-bottom:none";et2.innerHTML=`<span style="color:#94a3b8;font-weight:700">Total</span><span style="color:#F59E0B;font-weight:800;font-size:16px">${fmt(totEco)}</span>`;ec.appendChild(et2);}
   col.appendChild(ec);
+
   // Argent de poche
   const pcc=div("card");pcc.appendChild(el("h3",{className:"ct"},"Argent de poche"));
   data.argentPoche.forEach(x=>{const li=div("li");li.append(el("span",{style:"color:#cbd5e1"},x.prenom),iedit(fmt(x.montant),"#8B5CF6",()=>setState({modal:{type:"edit",itemType:"poche",item:{...x}}})));pcc.appendChild(li);});
   const vd=div("");vd.style.cssText="border-top:1px solid #334155;margin-top:8px;padding-top:10px";
-  const vl=div("li");vl.innerHTML=`<span style="color:#94a3b8;font-size:13px">Virement → Murielle</span><span style="color:#3B82F6;font-weight:800;font-size:15px">${fmt(murSal-murPoche)}</span>`;
-  vd.appendChild(vl);pcc.appendChild(vd);col.appendChild(pcc);
+  vd.innerHTML=`<div class="li"><span style="color:#94a3b8;font-size:13px">Virement → Murielle</span><span style="color:#3B82F6;font-weight:800;font-size:15px">${fmt(murSal-murPoche)}</span></div>`;
+  pcc.appendChild(vd);col.appendChild(pcc);
   return col;
 }
+
+// ── CARTE ALIMENTATION ────────────────────────────────────────────────────────
+function renderAlimentationCard(data){
+  const courses=data.courses||[];
+  const budget=data.depenses.find(d=>d.type==="Alimentation")?.montant||800;
+  const depense=courses.reduce((a,c)=>a+(+c.montant||0),0);
+  const reste=budget-depense;
+  const pct=budget>0?Math.min(Math.round((depense/budget)*100),100):0;
+  const ok=reste>=0;
+
+  const card=div("alim-card");
+  const hdr=div("alim-header");
+  const title=el("span",{className:"alim-title"},"🛒 Alimentation");
+  const addB=el("button",{className:"alim-add-btn"});addB.textContent="+ Courses";
+  addB.onclick=()=>setState({modal:{type:"addCourse"}});
+  hdr.append(title,addB);card.appendChild(hdr);
+
+  // Jauge
+  const jauge=div("alim-jauge");
+  const chiffres=div("alim-chiffres");
+  chiffres.innerHTML=`<span style="color:#F59E0B;font-weight:700">Dépensé : ${fmt(depense)}</span><span style="color:#94a3b8">Budget : ${fmt(budget)}</span>`;
+  jauge.appendChild(chiffres);
+  const pb=div("alim-pb");const pf=div("alim-pf");
+  pf.style.cssText=`width:${pct}%;background:${pct>=100?"#EF4444":pct>=80?"#F59E0B":"#10B981"}`;
+  pb.appendChild(pf);jauge.appendChild(pb);
+  card.appendChild(jauge);
+
+  // Reste
+  const resteEl=div("alim-reste");resteEl.style.color=ok?"#10B981":"#EF4444";
+  resteEl.textContent=ok?fmt(reste):"−"+fmt(Math.abs(reste));
+  const resteLabel=div("alim-reste-label");
+  resteLabel.textContent=ok?`reste à dépenser (${100-pct}%)`:`dépassement du budget !`;
+  card.append(resteEl,resteLabel);
+
+  // Historique courses
+  if(courses.length>0){
+    const hist=div("alim-courses");
+    hist.appendChild(el("div",{className:"alim-courses-title"},`${courses.length} course${courses.length>1?"s":""} ce mois`));
+    [...courses].reverse().forEach(c=>{
+      const row=div("alim-course-row");
+      const date=el("span",{className:"alim-course-date"},c.date);
+      const lbl=el("span",{className:"alim-course-label"},c.label);
+      const mnt=el("span",{className:"alim-course-mnt"},fmt(c.montant));
+      const del=el("button",{className:"alim-course-del"});del.textContent="✕";del.onclick=()=>delCourse(c.id);
+      row.append(date,lbl,mnt,del);hist.appendChild(row);
+    });
+    card.appendChild(hist);
+  } else {
+    const empty=el("p",{style:"color:#475569;font-size:12px;text-align:center;padding:8px 0"});
+    empty.textContent="Aucune course enregistrée ce mois";
+    card.appendChild(empty);
+  }
+  return card;
+}
+
 function iedit(val,color,onClick){
   const w=div("");w.style.cssText="display:flex;gap:8px;align-items:center";
   const sp=el("span",{style:`color:${color};font-weight:700`});sp.textContent=val;
@@ -463,10 +513,9 @@ function iedit(val,color,onClick){
   w.append(sp,b);return w;
 }
 
-// ── DEPENSES ──────────────────────────────────────────────────────────────────
+// DEPENSES
 function renderDepenses(data){
-  const filtre=STATE.filtre;
-  const cats=["toutes",...CATEGORIES];
+  const filtre=STATE.filtre;const cats=["toutes",...getCats()];
   const list=filtre==="toutes"?data.depenses:data.depenses.filter(d=>d.categorie===filtre);
   const nb=data.depenses.filter(d=>d.paye).length;
   const pct=data.depenses.length?Math.round((nb/data.depenses.length)*100):0;
@@ -476,16 +525,14 @@ function renderDepenses(data){
   ml.innerHTML=`<span>${nb}/${data.depenses.length} réglées</span><span>${pct}%</span>`;
   const mpb=div("pb");const mpf=div("pf");mpf.style.width=pct+"%";mpb.appendChild(mpf);
   mc.append(ml,mpb);col.appendChild(mc);
-  const fs=div("fscr");
-  cats.forEach(c=>{const b=el("button",{className:"fbtn"+(filtre===c?" on":"")});b.textContent=c;b.onclick=()=>setState({filtre:c});fs.appendChild(b);});
-  col.appendChild(fs);
+  const fs=div("fscr");cats.forEach(c=>{const b=el("button",{className:"fbtn"+(filtre===c?" on":"")});b.textContent=c;b.onclick=()=>setState({filtre:c});fs.appendChild(b);});col.appendChild(fs);
   list.forEach(d=>{
     const row=div("drow");row.style.opacity=d.paye?"0.55":"1";
     const chk=el("button",{className:"chk"+(d.paye?" done":"")});chk.textContent=d.paye?"✓":"";chk.onclick=()=>togglePaye(d.id);
     const info=div("");
     const name=el("div",{style:`color:${d.paye?"#64748b":"#f1f5f9"};font-weight:600;font-size:14px;text-decoration:${d.paye?"line-through":"none"};white-space:nowrap;overflow:hidden;text-overflow:ellipsis`});
     name.textContent=d.type;
-    const pill=el("span",{className:"pill",style:`background:${CAT_COLORS[d.categorie]||"#9CA3AF"}`});pill.textContent=d.categorie;
+    const pill=el("span",{className:"pill",style:`background:${getCatColor(d.categorie)}`});pill.textContent=d.categorie;
     info.append(name,pill);
     const mnt=el("span",{style:`color:${d.paye?"#64748b":"#f1f5f9"};font-weight:700;font-size:14px;margin-right:8px`});mnt.textContent=fmt(d.montant);
     const eb=el("button",{className:"eBtn"});eb.textContent="✏️";eb.onclick=()=>setState({modal:{type:"edit",itemType:"depense",item:{...d}}});
@@ -496,7 +543,7 @@ function renderDepenses(data){
   col.appendChild(ab);return col;
 }
 
-// ── HISTORIQUE ────────────────────────────────────────────────────────────────
+// HISTORIQUE
 function renderHistorique(months,allKeys){
   const col=div("col");
   if(allKeys.length<2){const c=div("card");c.innerHTML=`<p style="color:#64748b;text-align:center;padding:24px 0">📅 L'historique apparaîtra dès que vous aurez 2 mois enregistrés.</p>`;col.appendChild(c);return col;}
@@ -505,8 +552,10 @@ function renderHistorique(months,allKeys){
     const sal=m.salaires.reduce((a,x)=>a+(+x.montant||0),0);
     const dep=m.depenses.reduce((a,x)=>a+(+x.montant||0),0);
     const eco=m.economies.reduce((a,x)=>a+(+x.montant||0),0);
+    const courses=(m.courses||[]).reduce((a,x)=>a+(+x.montant||0),0);
+    const budgetAlim=m.depenses.find(d=>d.type==="Alimentation")?.montant||800;
     const pp=dep>0?Math.round((m.depenses.filter(d=>d.paye).reduce((a,x)=>a+(+x.montant||0),0)/dep)*100):0;
-    return{k,label:keyLabel(k),sal,dep,eco,solde:sal-dep-eco,pp};
+    return{k,label:keyLabel(k),sal,dep,eco,solde:sal-dep-eco,pp,courses,budgetAlim};
   });
   const maxDep=Math.max(...rows.map(r=>r.dep),1);
   const tc=div("card");tc.appendChild(el("h3",{className:"ct"},"Récapitulatif mensuel"));
@@ -515,27 +564,83 @@ function renderHistorique(months,allKeys){
   const tb=el("tbody",{});
   rows.forEach(r=>{const tr=el("tr",{style:"border-top:1px solid #1e3a5f"});tr.innerHTML=`<td style="padding:7px 6px;color:#cbd5e1;font-weight:600">${r.label}</td><td style="padding:7px 6px;text-align:right;color:#10B981;font-weight:600">${fmt(r.sal)}</td><td style="padding:7px 6px;text-align:right;color:#EF4444;font-weight:600">${fmt(r.dep)}</td><td style="padding:7px 6px;text-align:right;font-weight:700;color:${r.solde>=0?"#3B82F6":"#EF4444"}">${fmt(r.solde)}</td>`;tb.appendChild(tr);});
   t.appendChild(tb);tc.appendChild(t);col.appendChild(tc);
-  const bc=div("card");bc.appendChild(el("h3",{className:"ct"},"Évolution des dépenses"));
+
+  // Alimentation historique
+  const ac=div("card");ac.appendChild(el("h3",{className:"ct"},"🛒 Alimentation par mois"));
   rows.forEach(r=>{
+    const pct=r.budgetAlim>0?Math.min(Math.round((r.courses/r.budgetAlim)*100),100):0;
+    const ok=r.courses<=r.budgetAlim;
     const d=div("");d.style.marginBottom="12px";
-    d.innerHTML=`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:#94a3b8;font-weight:600">${r.label}</span><span style="color:#EF4444;font-weight:700">${fmt(r.dep)}</span></div><div style="background:#1e3a5f;border-radius:6px;height:8px;overflow:hidden"><div style="background:linear-gradient(90deg,#EF4444,#F59E0B);height:100%;border-radius:6px;width:${Math.round((r.dep/maxDep)*100)}%"></div></div><div style="font-size:11px;color:#475569;margin-top:2px">Réglé : ${r.pp}%</div>`;
-    bc.appendChild(d);
-  });col.appendChild(bc);
+    d.innerHTML=`
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <span style="color:#94a3b8;font-weight:600">${r.label}</span>
+        <span style="color:${ok?"#10B981":"#EF4444"};font-weight:700">${fmt(r.courses)} / ${fmt(r.budgetAlim)}</span>
+      </div>
+      <div style="background:#1e3a5f;border-radius:6px;height:8px;overflow:hidden">
+        <div style="background:${pct>=100?"#EF4444":pct>=80?"#F59E0B":"#10B981"};height:100%;border-radius:6px;width:${pct}%"></div>
+      </div>
+      <div style="font-size:11px;color:#475569;margin-top:2px">${ok?"Reste : "+fmt(r.budgetAlim-r.courses):"Dépassement : "+fmt(r.courses-r.budgetAlim)}</div>`;
+    ac.appendChild(d);
+  });col.appendChild(ac);
+
+  const bc=div("card");bc.appendChild(el("h3",{className:"ct"},"Évolution des dépenses"));
+  rows.forEach(r=>{const d=div("");d.style.marginBottom="12px";d.innerHTML=`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:#94a3b8;font-weight:600">${r.label}</span><span style="color:#EF4444;font-weight:700">${fmt(r.dep)}</span></div><div style="background:#1e3a5f;border-radius:6px;height:8px;overflow:hidden"><div style="background:linear-gradient(90deg,#EF4444,#F59E0B);height:100%;border-radius:6px;width:${Math.round((r.dep/maxDep)*100)}%"></div></div><div style="font-size:11px;color:#475569;margin-top:2px">Réglé : ${r.pp}%</div>`;bc.appendChild(d);});col.appendChild(bc);
+
   const ecc=div("card");ecc.appendChild(el("h3",{className:"ct"},"Épargne cumulée"));
-  let cum=0;[...rows].reverse().forEach(r=>{cum+=r.eco;const li=div("li");li.innerHTML=`<span style="color:#94a3b8;font-size:13px">${r.label}</span><div style="text-align:right"><div style="color:#F59E0B;font-weight:700;font-size:13px">${fmt(r.eco)}/mois</div><div style="color:#64748b;font-size:11px">Cumulé : ${fmt(cum)}</div></div>`;ecc.appendChild(li);});
-  col.appendChild(ecc);return col;
+  let cum=0;[...rows].reverse().forEach(r=>{cum+=r.eco;const li=div("li");li.innerHTML=`<span style="color:#94a3b8;font-size:13px">${r.label}</span><div style="text-align:right"><div style="color:#F59E0B;font-weight:700;font-size:13px">${fmt(r.eco)}/mois</div><div style="color:#64748b;font-size:11px">Cumulé : ${fmt(cum)}</div></div>`;ecc.appendChild(li);});col.appendChild(ecc);
+  return col;
 }
 
-// ── MODALS ────────────────────────────────────────────────────────────────────
+// MODALS
 function renderModal(modal,data,months,allKeys){
   const ol=div("overlay");ol.onclick=()=>setState({modal:null});
   const m=div("modal");m.onclick=e=>e.stopPropagation();
 
-  // Changer PIN
-  if(modal.type==="changePin"){
+  // ── Ajouter une course ──
+  if(modal.type==="addCourse"){
+    let label="Courses",montant="";
+    const courses=data.courses||[];
+    const budget=data.depenses.find(d=>d.type==="Alimentation")?.montant||800;
+    const dejaDepense=courses.reduce((a,c)=>a+(+c.montant||0),0);
+    const resteAvant=budget-dejaDepense;
+
+    m.appendChild(el("h2",{className:"mt"},"🛒 Ajouter des courses"));
+
+    // Info budget en haut
+    const infoHaut=div("");infoHaut.style.cssText="background:#0f172a;border-radius:8px;padding:10px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center";
+    infoHaut.innerHTML=`<div><div style="font-size:11px;color:#64748b">Budget alimentation</div><div style="font-size:15px;font-weight:800;color:#F59E0B">${fmt(budget)}</div></div><div style="text-align:center"><div style="font-size:11px;color:#64748b">Déjà dépensé</div><div style="font-size:15px;font-weight:800;color:#EF4444">${fmt(dejaDepense)}</div></div><div style="text-align:right"><div style="font-size:11px;color:#64748b">Reste</div><div style="font-size:15px;font-weight:800;color:${resteAvant>=0?"#10B981":"#EF4444"}">${fmt(resteAvant)}</div></div>`;
+    m.appendChild(infoHaut);
+
+    m.appendChild(el("label",{},"Lieu / description"));
+    const li=el("input",{type:"text",value:label,placeholder:"ex: Leclerc, Lidl…"});li.oninput=e=>{label=e.target.value;};m.appendChild(li);
+
+    m.appendChild(el("label",{},"Montant (€)"));
+    const mi=el("input",{type:"number",step:"0.01",value:"",placeholder:"0.00"});
+
+    // Bloc "reste après" mis à jour en direct
+    const resteApresBox=div("");resteApresBox.style.cssText="background:#0f172a;border-radius:8px;padding:12px;margin-top:12px;text-align:center";
+    resteApresBox.innerHTML=`<div style="font-size:11px;color:#64748b;margin-bottom:4px">Reste après cette course</div><div style="font-size:22px;font-weight:900;color:#10B981">${fmt(resteAvant)}</div>`;
+
+    mi.oninput=e=>{
+      montant=e.target.value;
+      const apres=resteAvant-(parseFloat(montant)||0);
+      const ok=apres>=0;
+      resteApresBox.innerHTML=`<div style="font-size:11px;color:#64748b;margin-bottom:4px">Reste après cette course</div><div style="font-size:22px;font-weight:900;color:${ok?"#10B981":"#EF4444"}">${ok?fmt(apres):"−"+fmt(Math.abs(apres))}</div>${!ok?'<div style="font-size:11px;color:#EF4444;margin-top:4px">⚠ Budget dépassé !</div>':""}`;
+    };
+    m.appendChild(mi);
+    m.appendChild(resteApresBox);
+
+    const btns=div("mbtns");
+    const sv=el("button",{className:"b-save"});sv.textContent="✓ Ajouter";sv.onclick=()=>{if(montant)addCourse(label,montant);};
+    const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null});
+    btns.append(sv,ca);m.appendChild(btns);
+  }
+
+  // ── Changer PIN ──
+  else if(modal.type==="changePin"){
     const steps=["","Entrez votre code actuel","Entrez le nouveau code","Confirmez le nouveau code"];
     m.appendChild(el("h2",{className:"mt"},"🔑 Changer le code PIN"));
-    const step=el("p",{className:"change-pin-step"});step.textContent=steps[STATE.changePinStep]||"";m.appendChild(step);
+    const step=el("p",{style:"font-size:13px;color:#94a3b8;margin-bottom:12px"});step.textContent=steps[STATE.changePinStep]||"";m.appendChild(step);
     const dots=div("pin-dots");dots.style.cssText="justify-content:center;margin-bottom:20px";
     for(let i=0;i<4;i++){const d=div("pin-dot");if(STATE.changePinInput.length>i)d.classList.add("filled");dots.appendChild(d);}
     m.appendChild(dots);
@@ -543,35 +648,95 @@ function renderModal(modal,data,months,allKeys){
     const grid=div("pin-grid");grid.style.margin="0 auto";
     ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
       if(d===""){grid.appendChild(div("pin-btn empty"));return;}
-      const b=div("pin-btn"+(d==="⌫"?" del":""));b.textContent=d;
-      b.onclick=()=>d==="⌫"?handleChangePinDel():handleChangePinDigit(d);
-      grid.appendChild(b);
+      const b=div("pin-btn"+(d==="⌫"?" del":""));b.textContent=d;b.onclick=()=>d==="⌫"?handleChangePinDel():handleChangePinDigit(d);grid.appendChild(b);
     });
     m.appendChild(grid);
-    const can=el("button",{className:"b-can",style:"margin-top:20px;width:100%"});can.textContent="Annuler";
-    can.onclick=()=>setState({modal:null,changePinStep:0,changePinInput:""});
-    m.appendChild(can);
-    ol.appendChild(m);return ol;
+    const ca=el("button",{className:"b-can",style:"margin-top:20px;width:100%"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null,changePinStep:0,changePinInput:""});m.appendChild(ca);
   }
 
-  // Edit / Add
-  if(modal.type==="edit"||modal.type==="add"){
+  // ── Edit / Add ──
+  else if(modal.type==="edit"||modal.type==="add"){
     const{itemType,item:orig}=modal;let item={...orig};const isEdit=modal.type==="edit";
     const titles={depense:isEdit?"Modifier la dépense":"Nouvelle dépense",salaire:"Modifier le salaire",economie:isEdit?"Modifier l'épargne":"Nouvelle ligne d'épargne",poche:"Argent de poche"};
     m.appendChild(el("h2",{className:"mt"},titles[itemType]||"Modifier"));
     if(itemType==="salaire"||itemType==="poche"){const p=el("p",{style:"color:#94a3b8;font-size:14px;margin-bottom:4px"});p.textContent=item.prenom;m.appendChild(p);}
     if(itemType==="depense"||itemType==="economie"){m.appendChild(el("label",{},"Libellé"));m.appendChild(inp("text",item.type,v=>{item.type=v;},"ex: Cinéma"));}
     m.appendChild(el("label",{},"Montant (€)"));m.appendChild(inp("number",item.montant,v=>{item.montant=v;}));
-    if(itemType==="depense"){m.appendChild(el("label",{},"Catégorie"));m.appendChild(sel(item.categorie||"autre",CATEGORIES,v=>{item.categorie=v;}));}
+    if(itemType==="depense"){
+      m.appendChild(el("label",{},"Catégorie"));
+      const catWrap=div("");catWrap.style.cssText="display:flex;flex-direction:column;gap:8px;margin-top:4px";
+
+      // Select existantes + option créer
+      const catSel=el("select",{});catSel.style.cssText="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:15px";
+      const allCats=getCats();
+      allCats.forEach(c=>{const o=el("option",{value:c});o.textContent=c;if(c===(item.categorie||"autre"))o.selected=true;catSel.appendChild(o);});
+      const oNew=el("option",{value:"__new__"});oNew.textContent="✚ Créer une nouvelle catégorie…";catSel.appendChild(oNew);
+
+      // Zone création (cachée par défaut)
+      const newCatWrap=div("");newCatWrap.style.cssText="display:none;flex-direction:column;gap:8px";
+      const newCatRow=div("");newCatRow.style.cssText="display:flex;gap:8px";
+      const newCatInp=el("input",{type:"text",placeholder:"Nom de la catégorie…"});
+      newCatInp.style.cssText="flex:1;background:#0f172a;border:1px solid #3B82F6;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:14px";
+      const newCatBtn=el("button",{});newCatBtn.textContent="✓ Créer";
+      newCatBtn.style.cssText="background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap";
+      const newCatErr=el("p",{});newCatErr.style.cssText="color:#EF4444;font-size:12px;min-height:16px";
+      newCatRow.append(newCatInp,newCatBtn);newCatWrap.append(newCatRow,newCatErr);
+
+      // Aussi : liste des catégories perso avec option supprimer
+      const customCats=getCats().filter(c=>!CATEGORIES_BASE.includes(c));
+      if(customCats.length>0){
+        const customList=div("");customList.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px";
+        customCats.forEach(c=>{
+          const tag=div("");tag.style.cssText=`display:flex;align-items:center;gap:4px;background:${getCatColor(c)};color:#fff;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:700`;
+          tag.innerHTML=`<span>${c}</span>`;
+          const d=el("button",{});d.textContent="✕";d.style.cssText="background:transparent;border:none;color:#fff;cursor:pointer;font-size:11px;padding:0 0 0 2px;opacity:.8";
+          d.onclick=e=>{e.stopPropagation();delCustomCat(c);
+            // retirer du select
+            Array.from(catSel.options).forEach(o=>{if(o.value===c)o.remove();});
+            tag.remove();
+            if(item.categorie===c){item.categorie="autre";catSel.value="autre";}
+          };
+          tag.appendChild(d);customList.appendChild(tag);
+        });
+        newCatWrap.appendChild(customList);
+      }
+
+      catSel.onchange=e=>{
+        if(e.target.value==="__new__"){
+          newCatWrap.style.display="flex";
+          newCatInp.focus();
+        } else {
+          item.categorie=e.target.value;
+          newCatWrap.style.display="none";
+        }
+      };
+      if(item.categorie&&item.categorie!=="autre")catSel.value=item.categorie;
+      item.categorie=item.categorie||"autre";
+
+      newCatBtn.onclick=()=>{
+        const nom=newCatInp.value.trim().toLowerCase();
+        if(!nom){newCatErr.textContent="Entrez un nom de catégorie";return;}
+        if(getCats().includes(nom)){newCatErr.textContent="Cette catégorie existe déjà";catSel.value=nom;item.categorie=nom;newCatWrap.style.display="none";return;}
+        addCustomCat(nom);
+        // Ajouter au select avant l'option "créer"
+        const o=el("option",{value:nom});o.textContent=nom;
+        catSel.insertBefore(o,catSel.lastChild);
+        catSel.value=nom;item.categorie=nom;
+        newCatWrap.style.display="none";
+        newCatInp.value="";newCatErr.textContent="";
+        notify("✓ Catégorie créée !");
+      };
+
+      catWrap.append(catSel,newCatWrap);m.appendChild(catWrap);
+    }
     const btns=div("mbtns");
     const sv=el("button",{className:"b-save"});sv.textContent="Sauvegarder";sv.onclick=()=>isEdit?saveItem(itemType,item):addItem(itemType,item);btns.appendChild(sv);
     if(isEdit&&(itemType==="depense"||itemType==="economie")){const d=el("button",{className:"b-del"});d.textContent="🗑";d.onclick=()=>delItem(itemType,item.id);btns.appendChild(d);}
-    const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null});btns.appendChild(ca);
-    m.appendChild(btns);
+    const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null});btns.appendChild(ca);m.appendChild(btns);
   }
 
-  // Nouveau mois
-  if(modal.type==="newMonth"){
+  // ── Nouveau mois ──
+  else if(modal.type==="newMonth"){
     const now=new Date();let year=now.getFullYear(),month=now.getMonth()+1,copy="";
     m.appendChild(el("h2",{className:"mt"},"Nouveau mois"));
     m.appendChild(el("label",{},"Année"));m.appendChild(sel(String(year),["2024","2025","2026","2027"],v=>{year=+v;}));
@@ -583,8 +748,7 @@ function renderModal(modal,data,months,allKeys){
     const so=["— Modèle de base —",...allKeys.map(k=>keyLabel(k))];
     m.appendChild(sel("",so,v=>{copy=allKeys[so.indexOf(v)-1]||"";}));
     const btns=div("mbtns");
-    const go=el("button",{className:"b-save"});go.textContent="✓ Créer le mois";
-    go.onclick=()=>createMonth(`${year}-${String(month).padStart(2,"0")}`,copy||null);
+    const go=el("button",{className:"b-save"});go.textContent="✓ Créer le mois";go.onclick=()=>createMonth(`${year}-${String(month).padStart(2,"0")}`,copy||null);
     const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null});
     btns.append(go,ca);m.appendChild(btns);
   }
@@ -592,9 +756,9 @@ function renderModal(modal,data,months,allKeys){
   ol.appendChild(m);return ol;
 }
 
-// ── START ─────────────────────────────────────────────────────────────────────
+// START
 if(isAuthed()){setState({screen:"app"});init();}
-else{setState({screen:"pin"});}
+else setState({screen:"pin"});
 </script>
 </body>
 </html>
