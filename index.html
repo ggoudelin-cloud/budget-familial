@@ -290,6 +290,9 @@ function addCourse(label,montant){
 function delCourse(id){
   setMonthsAndRender(m=>({...m,courses:(m.courses||[]).filter(c=>c.id!==id)}));
 }
+function updateCourse(id,patch){
+  setMonthsAndRender(m=>({...m,courses:(m.courses||[]).map(c=>c.id===id?{...c,...patch}:c)}));
+}
 // Mise à jour immédiate + sync
 function setMonthsAndRender(fn){
   const newMonth=fn(STATE.months[STATE.curKey]);
@@ -564,16 +567,86 @@ function renderAlimentationCard(data){
   card.append(resteEl,resteLabel);
 
   // Historique courses
+  // Calculer les jours disponibles du mois courant
+  const curKey=STATE.curKey;
+  const [curY,curM]=curKey.split("-").map(Number);
+  const daysInMonth=new Date(curY,curM,0).getDate();
+  const dayOptions=Array.from({length:daysInMonth},(_,i)=>{
+    const d=String(i+1).padStart(2,"0");
+    const m=String(curM).padStart(2,"0");
+    return `${d}/${m}`;
+  });
+
   if(courses.length>0){
     const hist=div("alim-courses");
     hist.appendChild(el("div",{className:"alim-courses-title"},`${courses.length} course${courses.length>1?"s":""} ce mois`));
     [...courses].reverse().forEach(c=>{
       const row=div("alim-course-row");
-      const date=el("span",{className:"alim-course-date"},c.date);
-      const lbl=el("span",{className:"alim-course-label"},c.label);
-      const mnt=el("span",{className:"alim-course-mnt"},fmt(c.montant));
+      row.style.flexDirection="column";row.style.alignItems="stretch";row.style.gap="0";
+
+      // Ligne principale
+      const mainLine=div("");mainLine.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:4px 0";
+
+      // Date cliquable
+      const dateBtn=el("button",{});
+      dateBtn.style.cssText="background:#1e3a5f;border:none;color:#60a5fa;font-size:11px;font-weight:700;padding:2px 6px;border-radius:6px;cursor:pointer;flex-shrink:0";
+      dateBtn.textContent=c.date;
+      dateBtn.title="Modifier la date";
+
+      const lbl=el("span",{className:"alim-course-label"});lbl.textContent=c.label;
+      const mnt=el("span",{className:"alim-course-mnt"});mnt.textContent=fmt(c.montant);
       const del=el("button",{className:"alim-course-del"});del.textContent="✕";del.onclick=()=>delCourse(c.id);
-      row.append(date,lbl,mnt,del);hist.appendChild(row);
+      mainLine.append(dateBtn,lbl,mnt,del);
+      row.appendChild(mainLine);
+
+      // Panneau édition date (caché par défaut)
+      const editPanel=div("");
+      editPanel.style.cssText="display:none;background:#0f172a;border-radius:8px;padding:10px;margin-bottom:6px;gap:8px;flex-direction:column";
+
+      // Sélecteur de jour
+      const dateRow=div("");dateRow.style.cssText="display:flex;align-items:center;gap:8px";
+      const dateLbl=el("span",{style:"color:#64748b;font-size:12px;flex-shrink:0"});dateLbl.textContent="Jour :";
+      const dateSel=el("select",{});
+      dateSel.style.cssText="flex:1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:6px 10px;color:#f1f5f9;font-size:14px";
+      dayOptions.forEach(d=>{
+        const o=el("option",{value:d});o.textContent=d;
+        if(d===c.date)o.selected=true;
+        dateSel.appendChild(o);
+      });
+      dateRow.append(dateLbl,dateSel);
+
+      // Champ montant éditable
+      const mntRow=div("");mntRow.style.cssText="display:flex;align-items:center;gap:8px";
+      const mntLbl=el("span",{style:"color:#64748b;font-size:12px;flex-shrink:0"});mntLbl.textContent="Montant :";
+      const mntInp=el("input",{type:"number",step:"0.01",value:c.montant});
+      mntInp.style.cssText="flex:1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:6px 10px;color:#f1f5f9;font-size:14px";
+      mntRow.append(mntLbl,mntInp);
+
+      // Boutons valider / annuler
+      const editBtns=div("");editBtns.style.cssText="display:flex;gap:8px";
+      const saveB=el("button",{type:"button"});saveB.textContent="✓ Valider";
+      saveB.style.cssText="flex:1;background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
+      saveB.onclick=e=>{
+        e.stopPropagation();
+        updateCourse(c.id,{date:dateSel.value,montant:parseFloat(mntInp.value)||c.montant});
+        editPanel.style.display="none";
+      };
+      const cancelB=el("button",{type:"button"});cancelB.textContent="Annuler";
+      cancelB.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
+      cancelB.onclick=e=>{e.stopPropagation();editPanel.style.display="none";};
+      editBtns.append(saveB,cancelB);
+
+      editPanel.append(dateRow,mntRow,editBtns);
+      row.appendChild(editPanel);
+
+      // Toggle panneau au clic sur la date
+      dateBtn.onclick=e=>{
+        e.stopPropagation();
+        const isOpen=editPanel.style.display==="flex";
+        editPanel.style.display=isOpen?"none":"flex";
+      };
+
+      hist.appendChild(row);
     });
     card.appendChild(hist);
   } else {
