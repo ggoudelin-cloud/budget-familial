@@ -794,7 +794,12 @@ function iedit(val,color,onClick){
 // DEPENSES
 function renderDepenses(data){
   const filtre=STATE.filtre;const cats=["toutes",...getCats()];
-  const list=filtre==="toutes"?data.depenses:data.depenses.filter(d=>d.categorie===filtre);
+  const list=(filtre==="toutes"?data.depenses:data.depenses.filter(d=>d.categorie===filtre))
+    .slice().sort((a,b)=>{
+      const catCmp=a.categorie.localeCompare(b.categorie,"fr");
+      if(catCmp!==0)return catCmp;
+      return a.type.localeCompare(b.type,"fr");
+    });
   const nb=data.depenses.filter(d=>d.paye).length;
   const pct=data.depenses.length?Math.round((nb/data.depenses.length)*100):0;
   const col=div("col");
@@ -1046,9 +1051,8 @@ function renderModal(modal,data,months,allKeys){
       const catWrap=div("");catWrap.style.cssText="display:flex;flex-direction:column;gap:8px;margin-top:4px";
       catWrap.onclick=e=>e.stopPropagation();
 
-      // ── Boutons catégories ──
+      // Boutons catégories
       const catGrid=div("");catGrid.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
-
       function renderCatButtons(){
         catGrid.innerHTML="";
         getCats().forEach(c=>{
@@ -1065,79 +1069,16 @@ function renderModal(modal,data,months,allKeys){
       renderCatButtons();
       catWrap.appendChild(catGrid);
 
-      // ── Boutons action ──
-      const actionRow=div("");actionRow.style.cssText="display:flex;gap:8px;margin-top:4px";
-
-      const newCatBtn2=el("button",{type:"button"});newCatBtn2.textContent="✚ Nouvelle catégorie";
-      newCatBtn2.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:8px;padding:8px 10px;font-weight:700;font-size:12px;cursor:pointer";
-      const manageBtn=el("button",{type:"button"});manageBtn.textContent="🗂 Gérer";
-      manageBtn.style.cssText="background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:8px;padding:8px 10px;font-weight:700;font-size:12px;cursor:pointer";
-      manageBtn.onclick=e=>{e.stopPropagation();const prev=STATE.modal;setState({modal:{type:"manageCats",prevModal:prev}});};
-      actionRow.append(newCatBtn2,manageBtn);
-      catWrap.appendChild(actionRow);
-
-      // ── Zone création nouvelle catégorie ──
-      const newCatWrap=div("");newCatWrap.style.cssText="display:none;flex-direction:column;gap:10px;background:#0f172a;border-radius:10px;padding:12px;border:1px solid #3B82F6";
-      newCatWrap.onclick=e=>e.stopPropagation();
-
-      const newCatInp=el("input",{type:"text",placeholder:"Nom de la catégorie…"});
-      newCatInp.style.cssText="width:100%;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:14px;box-sizing:border-box";
-
-      const PALETTE=["#3B82F6","#10B981","#8B5CF6","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#f97316","#6366f1","#14b8a6","#d946ef","#0ea5e9","#a855f7","#eab308","#78716c","#e11d48","#0d9488"];
-      let selectedColor=PALETTE[0];
-      const colorLabel=el("p",{style:"color:#94a3b8;font-size:12px;font-weight:700;margin-bottom:4px"});colorLabel.textContent="Couleur";
-      const colorGrid=div("");colorGrid.style.cssText="display:flex;flex-wrap:wrap;gap:8px";
-      PALETTE.forEach(color=>{
-        const swatch=div("");
-        swatch.style.cssText=`width:28px;height:28px;border-radius:50%;background:${color};cursor:pointer;border:3px solid transparent;transition:all .15s;flex-shrink:0`;
-        if(color===selectedColor)swatch.style.border="3px solid #fff";
-        swatch.onclick=e=>{
-          e.stopPropagation();
-          selectedColor=color;
-          colorGrid.querySelectorAll("div").forEach(s=>s.style.border="3px solid transparent");
-          swatch.style.border="3px solid #fff";
-          previewTag.style.background=color;
-        };
-        colorGrid.appendChild(swatch);
-      });
-
-      const previewWrap=div("");previewWrap.style.cssText="display:flex;align-items:center;gap:8px";
-      const previewLbl=el("span",{style:"color:#64748b;font-size:12px"});previewLbl.textContent="Aperçu :";
-      const previewTag=div("");previewTag.style.cssText=`background:${selectedColor};color:#fff;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700`;
-      previewTag.textContent="nouvelle catégorie";
-      newCatInp.oninput=e=>{previewTag.textContent=e.target.value||"nouvelle catégorie";};
-      previewWrap.append(previewLbl,previewTag);
-
-      const newCatBtns=div("");newCatBtns.style.cssText="display:flex;gap:8px";
-      const newCatBtn=el("button",{type:"button"});newCatBtn.textContent="✓ Créer";
-      newCatBtn.style.cssText="flex:1;background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:10px;font-weight:700;font-size:14px;cursor:pointer";
-      const newCatCancel=el("button",{type:"button"});newCatCancel.textContent="Annuler";
-      newCatCancel.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:10px;font-weight:700;font-size:14px;cursor:pointer";
-      newCatCancel.onclick=e=>{e.stopPropagation();newCatWrap.style.display="none";};
-      newCatBtns.append(newCatBtn,newCatCancel);
-      const newCatErr=el("p",{});newCatErr.style.cssText="color:#EF4444;font-size:12px;min-height:16px";
-      newCatWrap.append(newCatInp,colorLabel,colorGrid,previewWrap,newCatBtns,newCatErr);
-
-      newCatBtn2.onclick=e=>{
+      // Bouton Gérer uniquement
+      const manageBtn=el("button",{type:"button"});manageBtn.textContent="🗂 Gérer les catégories";
+      manageBtn.style.cssText="width:100%;background:transparent;border:1px solid #334155;color:#64748b;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer;margin-top:2px";
+      manageBtn.onclick=e=>{
         e.stopPropagation();
-        newCatWrap.style.display=newCatWrap.style.display==="flex"?"none":"flex";
-        if(newCatWrap.style.display==="flex")setTimeout(()=>newCatInp.focus(),50);
+        // Mémoriser la catégorie choisie et rouvrir ce modal après
+        const prev=STATE.modal;
+        setState({modal:{type:"manageCats",prevModal:prev,onReturn:()=>renderCatButtons()}});
       };
-
-      newCatBtn.onclick=e=>{
-        e.stopPropagation();
-        const nom=newCatInp.value.trim().toLowerCase();
-        if(!nom){newCatErr.textContent="Entrez un nom de catégorie";return;}
-        if(getCats().includes(nom)){newCatErr.textContent="Cette catégorie existe déjà";item.categorie=nom;renderCatButtons();newCatWrap.style.display="none";return;}
-        addCustomCat(nom,selectedColor);
-        item.categorie=nom;
-        renderCatButtons();
-        newCatWrap.style.display="none";
-        newCatInp.value="";newCatErr.textContent="";
-        notify("✓ Catégorie créée !");
-      };
-
-      catWrap.append(newCatWrap);
+      catWrap.appendChild(manageBtn);
       m.appendChild(catWrap);
     }
     const btns=div("mbtns");
@@ -1170,6 +1111,51 @@ function renderModal(modal,data,months,allKeys){
   else if(modal.type==="manageCats"){
     const PALETTE=["#3B82F6","#10B981","#8B5CF6","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#f97316","#6366f1","#14b8a6","#d946ef","#0ea5e9","#a855f7","#eab308","#78716c","#e11d48","#0d9488"];
     m.appendChild(el("h2",{className:"mt"},"🗂 Gérer les catégories"));
+
+    // ── Formulaire création ──
+    const createWrap=div("");createWrap.style.cssText="background:#0f172a;border-radius:10px;padding:12px;margin-bottom:16px;border:1px solid #334155";
+    createWrap.onclick=e=>e.stopPropagation();
+    const createTitle=el("p",{style:"color:#94a3b8;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px"});
+    createTitle.textContent="✚ Nouvelle catégorie";
+    const createInp=el("input",{type:"text",placeholder:"Nom…"});
+    createInp.style.cssText="width:100%;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:9px 12px;color:#f1f5f9;font-size:14px;box-sizing:border-box;margin-bottom:10px";
+    createInp.onclick=e=>e.stopPropagation();
+    // Palette couleur
+    let cSelectedColor=PALETTE[0];
+    // Aperçu
+    const cBottom=div("");cBottom.style.cssText="display:flex;gap:8px;align-items:center";
+    const cPreview=div("");cPreview.style.cssText=`background:${cSelectedColor};color:#fff;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700`;
+    cPreview.textContent="aperçu";
+    createInp.oninput=e=>{cPreview.textContent=e.target.value||"aperçu";};
+    const cColorLabel=el("p",{style:"color:#94a3b8;font-size:12px;font-weight:700;margin-bottom:6px"});cColorLabel.textContent="Couleur";
+    const cColorGrid=div("");cColorGrid.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px";
+    PALETTE.forEach(color=>{
+      const sw=div("");sw.style.cssText=`width:24px;height:24px;border-radius:50%;background:${color};cursor:pointer;border:${color===cSelectedColor?"2px solid #fff":"2px solid transparent"};flex-shrink:0`;
+      sw.onclick=e=>{
+        e.stopPropagation();
+        cSelectedColor=color;
+        cColorGrid.querySelectorAll("div").forEach(s=>s.style.border="2px solid transparent");
+        sw.style.border="2px solid #fff";
+        cPreview.style.background=color;
+      };
+      cColorGrid.appendChild(sw);
+    });
+    const cErr=el("p",{style:"color:#EF4444;font-size:11px;min-height:14px;margin-bottom:4px"});
+    const cBtn=el("button",{type:"button"});cBtn.textContent="✓ Créer";
+    cBtn.style.cssText="background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap";
+    cBtn.onclick=e=>{
+      e.stopPropagation();
+      const nom=createInp.value.trim().toLowerCase();
+      if(!nom){cErr.textContent="Entrez un nom";return;}
+      if(getCats().includes(nom)){cErr.textContent="Cette catégorie existe déjà";return;}
+      addCustomCat(nom,cSelectedColor);
+      createInp.value="";cPreview.textContent="aperçu";cErr.textContent="";
+      notify("✓ Catégorie créée !");
+      renderAllCats();
+    };
+    cBottom.append(cPreview,cBtn);
+    createWrap.append(createTitle,createInp,cColorLabel,cColorGrid,cErr,cBottom);
+    m.appendChild(createWrap);
 
     const listWrap=div("");listWrap.id="cat-manage-list";
 
