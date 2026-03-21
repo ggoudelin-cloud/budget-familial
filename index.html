@@ -306,14 +306,25 @@ function addItem(type,item){
 function addCourse(label,montant){
   const mnt=parseFloat(montant)||0;
   if(!mnt)return;
-  setMonthsAndRender(m=>({...m,courses:[...(m.courses||[]),{id:uid(),date:todayStr(),label:label||"Courses",montant:mnt}]}));
+  setMonthsAndRender(m=>({...m,courses:sortCourses([...(m.courses||[]),{id:uid(),date:todayStr(),label:label||"Courses",montant:mnt}])}));
   setState({modal:null});
 }
 function delCourse(id){
   setMonthsAndRender(m=>({...m,courses:(m.courses||[]).filter(c=>c.id!==id)}));
 }
+function sortCourses(courses){
+  return [...courses].sort((a,b)=>{
+    const [da,ma]=a.date.split("/").map(Number);
+    const [db,mb]=b.date.split("/").map(Number);
+    if(ma!==mb)return mb-ma; // mois décroissant
+    return db-da;            // jour décroissant = plus récent en premier
+  });
+}
 function updateCourse(id,patch){
-  setMonthsAndRender(m=>({...m,courses:(m.courses||[]).map(c=>c.id===id?{...c,...patch}:c)}));
+  setMonthsAndRender(m=>{
+    const updated=(m.courses||[]).map(c=>c.id===id?{...c,...patch}:c);
+    return{...m,courses:sortCourses(updated)};
+  });
 }
 // Mise à jour immédiate + sync
 function setMonthsAndRender(fn){
@@ -686,7 +697,7 @@ function renderAlimentationCard(data){
   if(courses.length>0){
     const hist=div("alim-courses");
     hist.appendChild(el("div",{className:"alim-courses-title"},`${courses.length} course${courses.length>1?"s":""} ce mois`));
-    [...courses].reverse().forEach(c=>{
+    [...sortCourses(courses)].forEach(c=>{
       const row=div("alim-course-row");
       row.style.flexDirection="column";row.style.alignItems="stretch";row.style.gap="0";
 
