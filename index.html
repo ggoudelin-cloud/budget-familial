@@ -158,7 +158,20 @@ function delCatAndReassign(nom){
   }
 }
 const COMMERCES_BASE=["Leclerc","Lidl","Aldi","Carrefour","Intermarché","Super U","Casino","Monoprix","Franprix","Picard","Biocoop","Grand Frais"];
-function getCommerces(){try{const v=localStorage.getItem("bf-commerces");if(v)return JSON.parse(v);}catch{}return[...COMMERCES_BASE];}
+function getCommerces(){
+  try{
+    const v=localStorage.getItem("bf-commerces");
+    if(v){
+      let list=JSON.parse(v);
+      // Migration forcée : toujours remplacer Bio c'Bon par Biocoop
+      let changed=false;
+      list=list.map(c=>{if(c==="Bio c' Bon"||c==="Bio c'Bon"||c==="Bio c' bon"){changed=true;return"Biocoop";}return c;});
+      if(changed)localStorage.setItem("bf-commerces",JSON.stringify(list));
+      return list;
+    }
+  }catch{}
+  return[...COMMERCES_BASE];
+}
 function saveCommerces(list){localStorage.setItem("bf-commerces",JSON.stringify(list));}
 function addCommerce(nom){const n=nom.trim();if(!n)return false;const list=getCommerces();if(list.map(x=>x.toLowerCase()).includes(n.toLowerCase()))return false;list.push(n);saveCommerces(list);return true;}
 function delCommerce(nom){saveCommerces(getCommerces().filter(c=>c!==nom));}
@@ -382,16 +395,52 @@ function startBlockTimer(){
     }
   },1000);
 }
-function handleChangePinDigit(d){
-  if(STATE.changePinStep===0)return;
-  const val=STATE.changePinInput+d;setState({changePinInput:val,changePinError:""});
-  if(val.length===4){
-    if(STATE.changePinStep===1){if(val===getPin()){setState({changePinStep:2,changePinOld:val,changePinInput:""});}else setState({changePinInput:"",changePinError:"Code actuel incorrect"});}
-    else if(STATE.changePinStep===2){setState({changePinStep:3,changePinNew:val,changePinInput:""});}
-    else if(STATE.changePinStep===3){if(val===STATE.changePinNew){setPin(val);setState({changePinStep:0,changePinInput:"",changePinError:"",modal:null});notify("✓ Code PIN modifié !");}else setState({changePinInput:"",changePinError:"Les codes ne correspondent pas"});}
+function updateChangePinDots(){
+  const dots=document.querySelectorAll("#change-pin-dots .pin-dot");
+  if(!dots.length)return;
+  dots.forEach((dot,i)=>{
+    dot.className="pin-dot";
+    if(STATE.changePinInput.length>i)dot.classList.add("filled");
+  });
+  const errEl=document.getElementById("change-pin-err");
+  if(errEl)errEl.textContent=STATE.changePinError||"";
+  const stepEl=document.getElementById("change-pin-step");
+  if(stepEl){
+    const steps=["","Entrez votre code actuel","Entrez le nouveau code","Confirmez le nouveau code"];
+    stepEl.textContent=steps[STATE.changePinStep]||"";
   }
 }
-function handleChangePinDel(){setState({changePinInput:STATE.changePinInput.slice(0,-1),changePinError:""});}
+function handleChangePinDigit(d){
+  if(STATE.changePinStep===0)return;
+  const val=STATE.changePinInput+d;
+  STATE.changePinInput=val;STATE.changePinError="";
+  updateChangePinDots();
+  if(val.length===4){
+    if(STATE.changePinStep===1){
+      if(val===getPin()){STATE.changePinStep=2;STATE.changePinOld=val;STATE.changePinInput="";}
+      else{STATE.changePinInput="";STATE.changePinError="Code actuel incorrect";}
+      updateChangePinDots();
+    }
+    else if(STATE.changePinStep===2){
+      STATE.changePinStep=3;STATE.changePinNew=val;STATE.changePinInput="";
+      updateChangePinDots();
+    }
+    else if(STATE.changePinStep===3){
+      if(val===STATE.changePinNew){
+        setPin(val);STATE.changePinStep=0;STATE.changePinInput="";STATE.changePinError="";
+        setState({modal:null});notify("✓ Code PIN modifié !");
+      } else {
+        STATE.changePinInput="";STATE.changePinError="Les codes ne correspondent pas";
+        updateChangePinDots();
+      }
+    }
+  }
+}
+function handleChangePinDel(){
+  STATE.changePinInput=STATE.changePinInput.slice(0,-1);
+  STATE.changePinError="";
+  updateChangePinDots();
+}
 
 // Render helpers
 function el(tag,attrs={},...ch){
@@ -903,18 +952,21 @@ function renderModal(modal,data,months,allKeys){
   else if(modal.type==="changePin"){
     const steps=["","Entrez votre code actuel","Entrez le nouveau code","Confirmez le nouveau code"];
     m.appendChild(el("h2",{className:"mt"},"🔑 Changer le code PIN"));
-    const step=el("p",{style:"font-size:13px;color:#94a3b8;margin-bottom:12px"});step.textContent=steps[STATE.changePinStep]||"";m.appendChild(step);
-    const dots=div("pin-dots");dots.style.cssText="justify-content:center;margin-bottom:20px";
+    const step=el("p",{id:"change-pin-step",style:"font-size:13px;color:#94a3b8;margin-bottom:12px"});
+    step.textContent=steps[STATE.changePinStep]||"";m.appendChild(step);
+    const dots=div("pin-dots");dots.id="change-pin-dots";dots.style.cssText="justify-content:center;margin-bottom:20px";
     for(let i=0;i<4;i++){const d=div("pin-dot");if(STATE.changePinInput.length>i)d.classList.add("filled");dots.appendChild(d);}
     m.appendChild(dots);
-    const err=el("p",{style:"color:#EF4444;font-size:13px;font-weight:700;min-height:20px;margin-bottom:12px;text-align:center"});err.textContent=STATE.changePinError||"";m.appendChild(err);
+    const err=el("p",{id:"change-pin-err",style:"color:#EF4444;font-size:13px;font-weight:700;min-height:20px;margin-bottom:12px;text-align:center"});
+    err.textContent=STATE.changePinError||"";m.appendChild(err);
     const grid=div("pin-grid");grid.style.margin="0 auto";
     ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
       if(d===""){grid.appendChild(div("pin-btn empty"));return;}
-      const b=div("pin-btn"+(d==="⌫"?" del":""));b.textContent=d;b.onclick=()=>d==="⌫"?handleChangePinDel():handleChangePinDigit(d);grid.appendChild(b);
+      const b=div("pin-btn"+(d==="⌫"?" del":""));b.textContent=d;b.onclick=e=>{e.stopPropagation();d==="⌫"?handleChangePinDel():handleChangePinDigit(d);};grid.appendChild(b);
     });
     m.appendChild(grid);
-    const ca=el("button",{className:"b-can",style:"margin-top:20px;width:100%"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null,changePinStep:0,changePinInput:""});m.appendChild(ca);
+    const ca=el("button",{className:"b-can",style:"margin-top:20px;width:100%"});ca.textContent="Annuler";
+    ca.onclick=()=>setState({modal:null,changePinStep:0,changePinInput:""});m.appendChild(ca);
   }
 
   // ── Edit / Add ──
