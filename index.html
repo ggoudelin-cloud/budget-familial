@@ -136,8 +136,10 @@ function delCustomCat(nom){
   delCatCustomColor(nom);
 }
 function delCatAndReassign(nom){
-  // Supprimer la catégorie
-  delCustomCat(nom);
+  // Supprimer la catégorie (native ou perso)
+  const cats=getCats().filter(c=>c!==nom);
+  saveCats(cats);
+  delCatCustomColor(nom);
   // Réaffecter toutes les dépenses de cette catégorie à "autre" dans TOUS les mois
   const months=STATE.months;
   let changed=false;
@@ -149,13 +151,9 @@ function delCatAndReassign(nom){
     });
     months[k]={...m,depenses:newDeps};
   });
-  if(changed){
-    DB.save(months);
-    STATE.months={...months};
-    notify("✓ Catégorie supprimée — dépenses réaffectées à \"autre\"");
-  } else {
-    notify("✓ Catégorie supprimée");
-  }
+  DB.save(months);
+  STATE.months={...months};
+  notify(changed?"✓ Catégorie supprimée — dépenses réaffectées à \"autre\"":"✓ Catégorie supprimée");
 }
 const COMMERCES_BASE=["Leclerc","Lidl","Aldi","Carrefour","Intermarché","Super U","Casino","Monoprix","Franprix","Picard","Biocoop","Grand Frais"];
 function getCommerces(){
@@ -820,7 +818,16 @@ function renderDepenses(data){
   });
   const ab=el("button",{className:"add-btn"});ab.textContent="+ Ajouter une dépense";
   ab.onclick=()=>setState({modal:{type:"add",itemType:"depense",item:{type:"",montant:"",categorie:"autre"}}});
-  col.appendChild(ab);return col;
+  col.appendChild(ab);
+
+  // Bouton gérer les catégories
+  const catBtn=el("button",{});
+  catBtn.textContent="🗂 Gérer les catégories";
+  catBtn.style.cssText="width:100%;background:transparent;border:1px solid #334155;color:#64748b;border-radius:10px;padding:10px;font-weight:700;font-size:13px;cursor:pointer;text-align:center";
+  catBtn.onclick=()=>setState({modal:{type:"manageCats",prevModal:null}});
+  col.appendChild(catBtn);
+
+  return col;
 }
 
 // HISTORIQUE
@@ -1037,23 +1044,45 @@ function renderModal(modal,data,months,allKeys){
     if(itemType==="depense"){
       m.appendChild(el("label",{},"Catégorie"));
       const catWrap=div("");catWrap.style.cssText="display:flex;flex-direction:column;gap:8px;margin-top:4px";
+      catWrap.onclick=e=>e.stopPropagation();
 
-      // Select existantes + options créer et gérer
-      const catSel=el("select",{});catSel.style.cssText="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:15px";
-      const allCats=getCats();
-      allCats.forEach(c=>{const o=el("option",{value:c});o.textContent=c;if(c===(item.categorie||"autre"))o.selected=true;catSel.appendChild(o);});
-      const oNew=el("option",{value:"__new__"});oNew.textContent="✚ Créer une nouvelle catégorie…";catSel.appendChild(oNew);
-      const oManage=el("option",{value:"__manage__"});oManage.textContent="🗑 Gérer / supprimer des catégories…";catSel.appendChild(oManage);
+      // ── Boutons catégories ──
+      const catGrid=div("");catGrid.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
 
-      // Zone création (cachée par défaut)
+      function renderCatButtons(){
+        catGrid.innerHTML="";
+        getCats().forEach(c=>{
+          const btn=div("");
+          const selected=c===(item.categorie||"autre");
+          btn.style.cssText=`padding:6px 12px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${selected?"#3B82F6":"#334155"};background:${selected?"#1d4ed8":"transparent"};color:${selected?"#fff":"#94a3b8"};display:flex;align-items:center;gap:4px;transition:all .15s`;
+          const dot=el("span",{});dot.style.cssText=`width:8px;height:8px;border-radius:50%;background:${getCatColor(c)};flex-shrink:0`;
+          const lbl=el("span",{});lbl.textContent=c;
+          btn.append(dot,lbl);
+          btn.onclick=e=>{e.stopPropagation();item.categorie=c;renderCatButtons();};
+          catGrid.appendChild(btn);
+        });
+      }
+      renderCatButtons();
+      catWrap.appendChild(catGrid);
+
+      // ── Boutons action ──
+      const actionRow=div("");actionRow.style.cssText="display:flex;gap:8px;margin-top:4px";
+
+      const newCatBtn2=el("button",{type:"button"});newCatBtn2.textContent="✚ Nouvelle catégorie";
+      newCatBtn2.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:8px;padding:8px 10px;font-weight:700;font-size:12px;cursor:pointer";
+      const manageBtn=el("button",{type:"button"});manageBtn.textContent="🗂 Gérer";
+      manageBtn.style.cssText="background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:8px;padding:8px 10px;font-weight:700;font-size:12px;cursor:pointer";
+      manageBtn.onclick=e=>{e.stopPropagation();const prev=STATE.modal;setState({modal:{type:"manageCats",prevModal:prev}});};
+      actionRow.append(newCatBtn2,manageBtn);
+      catWrap.appendChild(actionRow);
+
+      // ── Zone création nouvelle catégorie ──
       const newCatWrap=div("");newCatWrap.style.cssText="display:none;flex-direction:column;gap:10px;background:#0f172a;border-radius:10px;padding:12px;border:1px solid #3B82F6";
       newCatWrap.onclick=e=>e.stopPropagation();
 
-      // Nom
       const newCatInp=el("input",{type:"text",placeholder:"Nom de la catégorie…"});
       newCatInp.style.cssText="width:100%;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:14px;box-sizing:border-box";
 
-      // Sélecteur de couleur
       const PALETTE=["#3B82F6","#10B981","#8B5CF6","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#f97316","#6366f1","#14b8a6","#d946ef","#0ea5e9","#a855f7","#eab308","#78716c","#e11d48","#0d9488"];
       let selectedColor=PALETTE[0];
       const colorLabel=el("p",{style:"color:#94a3b8;font-size:12px;font-weight:700;margin-bottom:4px"});colorLabel.textContent="Couleur";
@@ -1072,7 +1101,6 @@ function renderModal(modal,data,months,allKeys){
         colorGrid.appendChild(swatch);
       });
 
-      // Aperçu
       const previewWrap=div("");previewWrap.style.cssText="display:flex;align-items:center;gap:8px";
       const previewLbl=el("span",{style:"color:#64748b;font-size:12px"});previewLbl.textContent="Aperçu :";
       const previewTag=div("");previewTag.style.cssText=`background:${selectedColor};color:#fff;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700`;
@@ -1080,50 +1108,37 @@ function renderModal(modal,data,months,allKeys){
       newCatInp.oninput=e=>{previewTag.textContent=e.target.value||"nouvelle catégorie";};
       previewWrap.append(previewLbl,previewTag);
 
-      // Boutons créer / annuler
       const newCatBtns=div("");newCatBtns.style.cssText="display:flex;gap:8px";
       const newCatBtn=el("button",{type:"button"});newCatBtn.textContent="✓ Créer";
       newCatBtn.style.cssText="flex:1;background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:10px;font-weight:700;font-size:14px;cursor:pointer";
       const newCatCancel=el("button",{type:"button"});newCatCancel.textContent="Annuler";
       newCatCancel.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:10px;font-weight:700;font-size:14px;cursor:pointer";
-      newCatCancel.onclick=e=>{e.stopPropagation();newCatWrap.style.display="none";catSel.value=item.categorie||"autre";};
+      newCatCancel.onclick=e=>{e.stopPropagation();newCatWrap.style.display="none";};
       newCatBtns.append(newCatBtn,newCatCancel);
-
       const newCatErr=el("p",{});newCatErr.style.cssText="color:#EF4444;font-size:12px;min-height:16px";
       newCatWrap.append(newCatInp,colorLabel,colorGrid,previewWrap,newCatBtns,newCatErr);
 
-      catSel.onchange=e=>{
-        if(e.target.value==="__new__"){
-          newCatWrap.style.display="flex";
-          newCatInp.focus();
-        } else if(e.target.value==="__manage__"){
-          // Sauvegarder le modal courant et ouvrir le gestionnaire
-          const prevModal=STATE.modal;
-          setState({modal:{type:"manageCats",prevModal}});
-        } else {
-          item.categorie=e.target.value;
-          newCatWrap.style.display="none";
-        }
+      newCatBtn2.onclick=e=>{
+        e.stopPropagation();
+        newCatWrap.style.display=newCatWrap.style.display==="flex"?"none":"flex";
+        if(newCatWrap.style.display==="flex")setTimeout(()=>newCatInp.focus(),50);
       };
-      if(item.categorie&&item.categorie!=="autre")catSel.value=item.categorie;
-      item.categorie=item.categorie||"autre";
 
       newCatBtn.onclick=e=>{
         e.stopPropagation();
         const nom=newCatInp.value.trim().toLowerCase();
         if(!nom){newCatErr.textContent="Entrez un nom de catégorie";return;}
-        if(getCats().includes(nom)){newCatErr.textContent="Cette catégorie existe déjà";catSel.value=nom;item.categorie=nom;newCatWrap.style.display="none";return;}
+        if(getCats().includes(nom)){newCatErr.textContent="Cette catégorie existe déjà";item.categorie=nom;renderCatButtons();newCatWrap.style.display="none";return;}
         addCustomCat(nom,selectedColor);
-        // Ajouter au select avant les 2 dernières options
-        const o=el("option",{value:nom});o.textContent=nom;
-        catSel.insertBefore(o,catSel.options[catSel.options.length-2]);
-        catSel.value=nom;item.categorie=nom;
+        item.categorie=nom;
+        renderCatButtons();
         newCatWrap.style.display="none";
         newCatInp.value="";newCatErr.textContent="";
         notify("✓ Catégorie créée !");
       };
 
-      catWrap.append(catSel,newCatWrap);m.appendChild(catWrap);
+      catWrap.append(newCatWrap);
+      m.appendChild(catWrap);
     }
     const btns=div("mbtns");
     const sv=el("button",{className:"b-save"});sv.textContent="Sauvegarder";
@@ -1153,108 +1168,136 @@ function renderModal(modal,data,months,allKeys){
 
   // ── Gérer / supprimer catégories ──
   else if(modal.type==="manageCats"){
+    const PALETTE=["#3B82F6","#10B981","#8B5CF6","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#f97316","#6366f1","#14b8a6","#d946ef","#0ea5e9","#a855f7","#eab308","#78716c","#e11d48","#0d9488"];
     m.appendChild(el("h2",{className:"mt"},"🗂 Gérer les catégories"));
 
-    const allCats=getCats();
-    const customCats=allCats.filter(c=>!CATEGORIES_BASE.includes(c));
+    const listWrap=div("");listWrap.id="cat-manage-list";
 
-    // Catégories de base (non supprimables)
-    const baseSection=div("");baseSection.style.cssText="margin-bottom:16px";
-    baseSection.appendChild(el("p",{style:"color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px"},"Catégories de base"));
-    const baseList=div("");baseList.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
-    CATEGORIES_BASE.forEach(c=>{
-      const tag=div("");tag.style.cssText=`background:${getCatColor(c)};color:#fff;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700`;
-      tag.textContent=c;baseList.appendChild(tag);
-    });
-    baseSection.appendChild(baseList);
-    m.appendChild(baseSection);
-
-    // Catégories personnalisées (supprimables)
-    const customSection=div("");
-    customSection.appendChild(el("p",{style:"color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px"},"Catégories personnalisées"));
-
-    const listWrap=div(""); listWrap.id="custom-cat-list";
-    function renderCustomList(){
+    function renderAllCats(){
       listWrap.innerHTML="";
-      const current=getCats().filter(c=>!CATEGORIES_BASE.includes(c));
-      if(current.length===0){
-        const p=el("p",{style:"color:#475569;font-size:13px;padding:8px 0"});p.textContent="Aucune catégorie personnalisée";listWrap.appendChild(p);return;
-      }
-      current.forEach(c=>{
-        const row=div("");row.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#0f172a;border-radius:8px;margin-bottom:6px";
-        const left=div("");left.style.cssText="display:flex;align-items:center;gap:8px";
+      const allCats=getCats(); // toutes : natives + perso
+      allCats.forEach(c=>{
+        const isNative=CATEGORIES_BASE.includes(c);
+        const row=div("");row.style.cssText="background:#0f172a;border-radius:8px;margin-bottom:8px;overflow:hidden";
+
+        // ── Ligne principale ──
+        const main=div("");main.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:8px 10px";
+        const left=div("");left.style.cssText="display:flex;align-items:center;gap:8px;flex:1;min-width:0";
         const dot=div("");dot.style.cssText=`width:10px;height:10px;border-radius:50%;background:${getCatColor(c)};flex-shrink:0`;
-        const lbl=el("span",{style:"color:#cbd5e1;font-size:14px;font-weight:600"});lbl.textContent=c;
-        left.append(dot,lbl);
+        const lbl=el("span",{style:"color:#cbd5e1;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"});lbl.textContent=c;
+        let nb=0;Object.values(STATE.months).forEach(mo=>mo.depenses.forEach(d=>{if(d.categorie===c)nb++;}));
+        const count=el("span",{style:"color:#64748b;font-size:11px;margin-left:4px;flex-shrink:0"});
+        count.textContent=nb>0?`(${nb})` :"";
+        left.append(dot,lbl,count);
 
-        // Compter les dépenses concernées
-        let nb=0;
-        Object.values(STATE.months).forEach(mo=>mo.depenses.forEach(d=>{if(d.categorie===c)nb++;}));
-        const count=el("span",{style:"color:#64748b;font-size:11px;margin-left:4px"});
-        count.textContent=nb>0?`(${nb} dépense${nb>1?"s":""})` :"";
-        left.appendChild(count);
+        const rowBtns=div("");rowBtns.style.cssText="display:flex;gap:6px;flex-shrink:0";
 
-        const rowBtns=div("");rowBtns.style.cssText="display:flex;gap:6px";
-
-        // Bouton changer couleur
-        const colorB=el("button",{});colorB.textContent="🎨";
-        colorB.style.cssText="background:#334155;border:none;color:#fff;border-radius:8px;padding:5px 8px;font-size:14px;cursor:pointer";
-        colorB.title="Changer la couleur";
-        colorB.onclick=()=>{
-          // Retirer le panneau si déjà ouvert
+        // 🎨 Couleur
+        const colorB=el("button",{type:"button"});colorB.textContent="🎨";
+        colorB.style.cssText="background:#334155;border:none;color:#fff;border-radius:8px;padding:5px 8px;font-size:13px;cursor:pointer";
+        colorB.onclick=e=>{
+          e.stopPropagation();
           const existing=row.querySelector(".color-picker-inline");
           if(existing){existing.remove();return;}
-          const PALETTE=["#3B82F6","#10B981","#8B5CF6","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#f97316","#6366f1","#14b8a6","#d946ef","#0ea5e9","#a855f7","#eab308","#78716c","#e11d48","#0d9488"];
-          const picker=div("color-picker-inline");picker.style.cssText="display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:#1e293b;border-radius:8px;margin-top:6px";
+          // fermer autres pickers
+          listWrap.querySelectorAll(".color-picker-inline").forEach(x=>x.remove());
+          listWrap.querySelectorAll(".rename-wrap").forEach(x=>x.remove());
+          const picker=div("color-picker-inline");picker.style.cssText="display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;background:#1e293b;border-top:1px solid #334155";
           PALETTE.forEach(color=>{
-            const sw=div("");sw.style.cssText=`width:24px;height:24px;border-radius:50%;background:${color};cursor:pointer;border:${getCatColor(c)===color?"2px solid #fff":"2px solid transparent"}`;
-            sw.onclick=()=>{
-              saveCatCustomColor(c,color);
-              dot.style.background=color;
-              picker.remove();
-              notify("✓ Couleur modifiée !");
-              renderCustomList();
-            };
+            const sw=div("");sw.style.cssText=`width:26px;height:26px;border-radius:50%;background:${color};cursor:pointer;border:${getCatColor(c)===color?"2px solid #fff":"2px solid transparent"}`;
+            sw.onclick=e=>{e.stopPropagation();saveCatCustomColor(c,color);dot.style.background=color;picker.remove();notify("✓ Couleur modifiée !");};
             picker.appendChild(sw);
           });
           row.appendChild(picker);
         };
 
-        const delB=el("button",{});delB.textContent="🗑";
-        delB.style.cssText="background:#7f1d1d;border:none;color:#fca5a5;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer";
-        rowBtns.append(colorB,delB);
-        delB.onclick=()=>{
-          const confirm=div("");confirm.style.cssText="background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:10px;margin-top:6px";
-          if(nb>0){
-            confirm.innerHTML=`<p style="color:#fca5a5;font-size:13px;margin-bottom:8px">⚠ <strong>${nb} dépense${nb>1?"s":""}</strong> seront réaffectée${nb>1?"s":""} à <strong>"autre"</strong>.</p>`;
-          } else {
-            confirm.innerHTML=`<p style="color:#94a3b8;font-size:13px;margin-bottom:8px">Supprimer la catégorie <strong>"${c}"</strong> ?</p>`;
-          }
-          const confirmBtns=div("");confirmBtns.style.cssText="display:flex;gap:8px";
-          const yes=el("button",{});yes.textContent="✓ Confirmer";yes.style.cssText="flex:1;background:#EF4444;border:none;color:#fff;border-radius:8px;padding:8px;font-weight:700;font-size:13px;cursor:pointer";
-          yes.onclick=()=>{
-            delCatAndReassign(c);
-            renderCustomList();
+        // ✏️ Renommer
+        const renameB=el("button",{type:"button"});renameB.textContent="✏️";
+        renameB.style.cssText="background:#334155;border:none;color:#fff;border-radius:8px;padding:5px 8px;font-size:13px;cursor:pointer";
+        renameB.onclick=e=>{
+          e.stopPropagation();
+          const existing=row.querySelector(".rename-wrap");
+          if(existing){existing.remove();return;}
+          listWrap.querySelectorAll(".rename-wrap").forEach(x=>x.remove());
+          listWrap.querySelectorAll(".color-picker-inline").forEach(x=>x.remove());
+          const rw=div("rename-wrap");rw.style.cssText="display:flex;gap:8px;padding:8px 10px;background:#1e293b;border-top:1px solid #334155";
+          rw.onclick=e=>e.stopPropagation();
+          const ri=el("input",{type:"text",value:c,placeholder:"Nouveau nom…"});
+          ri.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:6px 10px;color:#f1f5f9;font-size:14px";
+          ri.onclick=e=>e.stopPropagation();
+          const rb=el("button",{type:"button"});rb.textContent="✓";
+          rb.style.cssText="background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:6px 12px;font-weight:700;font-size:14px;cursor:pointer";
+          rb.onclick=e=>{
+            e.stopPropagation();
+            const newName=ri.value.trim().toLowerCase();
+            if(!newName||newName===c){rw.remove();return;}
+            if(getCats().includes(newName)){notify("⚠ Ce nom existe déjà");return;}
+            // Renommer dans getCats
+            const cats=getCats().map(x=>x===c?newName:x);
+            saveCats(cats);
+            // Transférer la couleur
+            const col=getCatCustomColors()[c];
+            if(col)saveCatCustomColor(newName,col);
+            delCatCustomColor(c);
+            // Renommer dans toutes les dépenses
+            Object.keys(STATE.months).forEach(k=>{
+              STATE.months[k].depenses=STATE.months[k].depenses.map(d=>d.categorie===c?{...d,categorie:newName}:d);
+            });
+            DB.save(STATE.months);
+            notify("✓ Catégorie renommée !");
+            renderAllCats();
           };
-          const no=el("button",{});no.textContent="Annuler";no.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:8px;font-weight:700;font-size:13px;cursor:pointer";
-          no.onclick=()=>confirm.remove();
-          confirmBtns.append(yes,no);confirm.appendChild(confirmBtns);
-          row.appendChild(confirm);
-          // Masquer le bouton supprimer
-          delB.style.display="none";
+          const rc=el("button",{type:"button"});rc.textContent="✕";
+          rc.style.cssText="background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer";
+          rc.onclick=e=>{e.stopPropagation();rw.remove();};
+          rw.append(ri,rb,rc);row.appendChild(rw);
+          setTimeout(()=>ri.focus(),50);
         };
-        row.append(left,rowBtns);listWrap.appendChild(row);
+
+        // 🗑 Supprimer
+        const delB=el("button",{type:"button"});delB.textContent="🗑";
+        delB.style.cssText="background:#7f1d1d;border:none;color:#fca5a5;border-radius:8px;padding:5px 8px;font-size:13px;cursor:pointer";
+        delB.onclick=e=>{
+          e.stopPropagation();
+          listWrap.querySelectorAll(".del-confirm").forEach(x=>x.remove());
+          listWrap.querySelectorAll(".rename-wrap,.color-picker-inline").forEach(x=>x.remove());
+          const cf=div("del-confirm");cf.style.cssText="padding:8px 10px;background:#1e293b;border-top:1px solid #EF4444";
+          cf.onclick=e=>e.stopPropagation();
+          const msg=el("p",{style:"color:#fca5a5;font-size:12px;margin-bottom:8px"});
+          msg.innerHTML=nb>0
+            ?`⚠ <strong>${nb} dépense${nb>1?"s":""}</strong> → réaffectée${nb>1?"s":""} à <strong>"autre"</strong>`
+            :`Supprimer <strong>"${c}"</strong> ?`;
+          const cfBtns=div("");cfBtns.style.cssText="display:flex;gap:8px";
+          const yes=el("button",{type:"button"});yes.textContent="✓ Confirmer";
+          yes.style.cssText="flex:1;background:#EF4444;border:none;color:#fff;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
+          yes.onclick=e=>{
+            e.stopPropagation();
+            delCatAndReassign(c);
+            renderAllCats();
+          };
+          const no=el("button",{type:"button"});no.textContent="Annuler";
+          no.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
+          no.onclick=e=>{e.stopPropagation();cf.remove();};
+          cfBtns.append(yes,no);cf.append(msg,cfBtns);row.appendChild(cf);
+        };
+
+        rowBtns.append(colorB,renameB,delB);
+        main.append(left,rowBtns);row.appendChild(main);
+        listWrap.appendChild(row);
       });
+
+      if(getCats().length===0){
+        const p=el("p",{style:"color:#475569;font-size:13px;padding:8px 0"});
+        p.textContent="Aucune catégorie";listWrap.appendChild(p);
+      }
     }
-    renderCustomList();
-    customSection.appendChild(listWrap);
-    m.appendChild(customSection);
+    renderAllCats();
+    m.appendChild(listWrap);
 
     const ca=el("button",{className:"b-can",style:"margin-top:20px;width:100%"});ca.textContent="← Retour";
     ca.onclick=()=>setState({modal:modal.prevModal||null});
     m.appendChild(ca);
   }
-
   ol.appendChild(m);return ol;
 }
 
