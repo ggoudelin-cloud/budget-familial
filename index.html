@@ -2,10 +2,22 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com; img-src 'self' data:; font-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://script.google.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com; img-src 'self' data:; font-src 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0f172a">
+<!-- Content Security Policy : bloque toute ressource externe non autorisée -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self' 'unsafe-inline';
+  style-src 'self' 'unsafe-inline';
+  connect-src https://script.google.com https://*.google.com;
+  img-src 'self' data:;
+  base-uri 'self';
+  form-action 'none';
+">
 <title>Budget Familial</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -112,6 +124,43 @@ input,select{width:100%;background:#0f172a;border:1px solid #334155;border-radiu
 <body>
 <div id="root"></div>
 <script>
+// Clé de chiffrement des données budget (AES-256-GCM)
+const _DKEY="BWEUG+s+QIe937vmFUuqVJXAaY8VGkDXHHs0trZjUR8=";
+let _dataKey=null;
+async function getDataKey(){
+  if(_dataKey)return _dataKey;
+  _dataKey=await crypto.subtle.importKey("raw",
+    Uint8Array.from(atob(_DKEY),c=>c.charCodeAt(0)),
+    {name:"AES-GCM"},false,["encrypt","decrypt"]);
+  return _dataKey;
+}
+async function encryptData(obj){
+  const key=await getDataKey();
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const enc=await crypto.subtle.encrypt(
+    {name:"AES-GCM",iv},key,
+    new TextEncoder().encode(JSON.stringify(obj))
+  );
+  return JSON.stringify({
+    iv:btoa(String.fromCharCode(...iv)),
+    d:btoa(String.fromCharCode(...new Uint8Array(enc)))
+  });
+}
+async function decryptData(str){
+  try{
+    const{iv,d}=JSON.parse(str);
+    if(!iv||!d)return JSON.parse(str); // compatibilité ancien format non chiffré
+    const key=await getDataKey();
+    const dec=await crypto.subtle.decrypt(
+      {name:"AES-GCM",iv:Uint8Array.from(atob(iv),c=>c.charCodeAt(0))},
+      key,new Uint8Array(Array.from(atob(d),c=>c.charCodeAt(0)))
+    );
+    return JSON.parse(new TextDecoder().decode(dec));
+  }catch{
+    try{return JSON.parse(str);}catch{return null;} // fallback
+  }
+}
+
 // URL chiffrée avec AES-256-GCM — non lisible en clair
 const _ENC={
   k:"Wts+/Mu6gm+KMWfljgcI86REQHgfc3JmPYiOdVwp6/A=",
@@ -258,15 +307,40 @@ function makeMonth(srcDeps,srcMonth){
 let _saveTimer=null;
 const DB={
   async load(){
-    try{const r=await fetch(GAS_URL,{redirect:"follow"});const t=await r.text();if(t&&t.trim().startsWith("{"))return JSON.parse(t);}catch{}
-    try{const v=localStorage.getItem("bf-local");if(v)return JSON.parse(v);}catch{}
+    try{
+      const r=await fetch(GAS_URL,{redirect:"follow"});
+      const t=await r.text();
+      if(t&&t.trim().length>2){
+        const dec=await decryptData(t);
+        if(dec&&typeof dec==="object")return dec;
+      }
+    }catch{}
+    // Fallback localStorage
+    try{
+      const v=localStorage.getItem("bf-local");
+      if(v){
+        const dec=await decryptData(v);
+        if(dec&&typeof dec==="object")return dec;
+      }
+    }catch{}
     return null;
   },
-  save(data){
-    try{localStorage.setItem("bf-local",JSON.stringify(data));}catch{}
+  async save(data){
+    // Chiffrement local immédiat
+    try{
+      const enc=await encryptData(data);
+      localStorage.setItem("bf-local",enc);
+    }catch{
+      try{localStorage.setItem("bf-local",JSON.stringify(data));}catch{}
+    }
     clearTimeout(_saveTimer);_saveTimer=setTimeout(()=>DB._send(data),800);
   },
-  async _send(data){try{await fetch(GAS_URL,{method:"POST",body:JSON.stringify(data),headers:{"Content-Type":"text/plain"}});}catch{}}
+  async _send(data){
+    try{
+      const enc=await encryptData(data);
+      await fetch(GAS_URL,{method:"POST",body:enc,headers:{"Content-Type":"text/plain"}});
+    }catch{}
+  }
 };
 
 // STATE
