@@ -214,34 +214,36 @@ async function lsGet(key){
   }catch{return null;}
 }
 // ── Catégories ───────────────────────────────────────────────────────────────
+const CATS_KEY="bf-cats-v2"; // clé v2 pour repartir propre
 function getCats(){
   try{
-    const v=localStorage.getItem("bf-cats");
-    if(v){
-      // Tenter déchiffrement (nouveau format) sinon JSON direct (ancien)
-      try{const p=JSON.parse(v);if(Array.isArray(p))return p;}catch{}
-    }
+    const v=localStorage.getItem(CATS_KEY);
+    if(v){const p=JSON.parse(v);if(Array.isArray(p)&&p.length>0)return p;}
+  }catch{}
+  // Migration depuis ancienne clé
+  try{
+    const old=localStorage.getItem("bf-cats");
+    if(old){const p=JSON.parse(old);if(Array.isArray(p)&&p.length>0){localStorage.setItem(CATS_KEY,JSON.stringify(p));localStorage.removeItem("bf-cats");return p;}}
   }catch{}
   return[...CATEGORIES_BASE];
 }
 function saveCats(cats){
-  // Chiffrement async — fallback synchrone si nécessaire
-  encryptData(cats).then(enc=>localStorage.setItem("bf-cats",enc))
-    .catch(()=>localStorage.setItem("bf-cats",JSON.stringify(cats)));
+  try{localStorage.setItem(CATS_KEY,JSON.stringify(cats));}catch{}
 }
 const CAT_COLORS={logement:"#3B82F6",assurances:"#10B981",abonnements:"#8B5CF6","crédits":"#EF4444","vie courante":"#F59E0B",transport:"#06B6D4",enfants:"#EC4899",animaux:"#84CC16",autre:"#9CA3AF"};
+const CAT_COLORS_KEY="bf-cat-colors-v2";
 function getCatCustomColors(){
-  try{const v=localStorage.getItem("bf-cat-colors");if(v){try{return JSON.parse(v);}catch{}}}catch{}return{};
+  try{const v=localStorage.getItem(CAT_COLORS_KEY);if(v)return JSON.parse(v);}catch{}
+  try{const old=localStorage.getItem("bf-cat-colors");if(old){const p=JSON.parse(old);localStorage.setItem(CAT_COLORS_KEY,JSON.stringify(p));localStorage.removeItem("bf-cat-colors");return p;}}catch{}
+  return{};
 }
 function saveCatCustomColor(cat,color){
   const cc=getCatCustomColors();cc[cat]=color;
-  encryptData(cc).then(enc=>localStorage.setItem("bf-cat-colors",enc))
-    .catch(()=>localStorage.setItem("bf-cat-colors",JSON.stringify(cc)));
+  try{localStorage.setItem(CAT_COLORS_KEY,JSON.stringify(cc));}catch{}
 }
 function delCatCustomColor(cat){
   const cc=getCatCustomColors();delete cc[cat];
-  encryptData(cc).then(enc=>localStorage.setItem("bf-cat-colors",enc))
-    .catch(()=>localStorage.setItem("bf-cat-colors",JSON.stringify(cc)));
+  try{localStorage.setItem(CAT_COLORS_KEY,JSON.stringify(cc));}catch{}
 }
 function getCatColor(cat){const custom=getCatCustomColors()[cat];if(custom)return custom;return CAT_COLORS[cat]||(CAT_COLORS_EXTRA[getCats().indexOf(cat)%CAT_COLORS_EXTRA.length]||"#9CA3AF");}
 function addCustomCat(nom,color){
@@ -276,32 +278,52 @@ function delCatAndReassign(nom){
   notify(changed?"✓ Catégorie supprimée — dépenses réaffectées à \"autre\"":"✓ Catégorie supprimée");
 }
 const COMMERCES_BASE=["Leclerc","Lidl","Aldi","Carrefour","Intermarché","Super U","Casino","Monoprix","Franprix","Picard","Biocoop","Grand Frais"];
+
+// Commerces stockés en JSON simple (synchrone) — pas de chiffrement async
+// pour éviter les problèmes de timing lors de la lecture/écriture
+const COMMERCES_KEY="bf-commerces-v2"; // clé v2 pour repartir propre
+
 function getCommerces(){
   try{
-    const v=localStorage.getItem("bf-commerces");
+    const v=localStorage.getItem(COMMERCES_KEY);
     if(v){
-      let list;
-      // Tenter déchiffrement (nouveau format) sinon JSON (ancien)
-      try{const p=JSON.parse(v);list=Array.isArray(p)?p:null;}catch{list=null;}
-      if(!list)list=[];
-      // Migration forcée : toujours remplacer Bio c'Bon par Biocoop
-      let changed=false;
-      list=list.map(c=>{if(c==="Bio c' Bon"||c==="Bio c'Bon"||c==="Bio c' bon"){changed=true;return"Biocoop";}return c;});
-      if(changed)localStorage.setItem("bf-commerces",JSON.stringify(list));
-      return list;
+      const list=JSON.parse(v);
+      if(Array.isArray(list)&&list.length>0)return list;
+    }
+  }catch{}
+  // Essayer l'ancienne clé (migration)
+  try{
+    const old=localStorage.getItem("bf-commerces");
+    if(old){
+      const p=JSON.parse(old);
+      if(Array.isArray(p)&&p.length>0){
+        // Migrer vers nouvelle clé
+        localStorage.setItem(COMMERCES_KEY,JSON.stringify(p));
+        localStorage.removeItem("bf-commerces");
+        return p;
+      }
     }
   }catch{}
   return[...COMMERCES_BASE];
 }
+
 function saveCommerces(list){
-  encryptData(list).then(enc=>localStorage.setItem("bf-commerces",enc))
-    .catch(()=>localStorage.setItem("bf-commerces",JSON.stringify(list)));
+  // Synchrone — pas d'async pour garantir la cohérence
+  try{localStorage.setItem(COMMERCES_KEY,JSON.stringify(list));}catch{}
 }
-function addCommerce(nom){const n=nom.trim();if(!n)return false;const list=getCommerces();if(list.map(x=>x.toLowerCase()).includes(n.toLowerCase()))return false;list.push(n);saveCommerces(list);return true;}
+
+function addCommerce(nom){
+  const n=nom.trim();
+  if(!n)return false;
+  const list=getCommerces();
+  if(list.map(x=>x.toLowerCase()).includes(n.toLowerCase()))return false;
+  list.push(n);
+  saveCommerces(list);
+  return true;
+}
 function delCommerce(nom){
-  const current=getCommerces(); // retourne COMMERCES_BASE si rien en localStorage
-  const filtered=current.filter(c=>c!==nom);
-  saveCommerces(filtered); // force la sauvegarde avec le commerce retiré
+  const list=getCommerces().filter(c=>c!==nom);
+  saveCommerces(list);
 }
 const MOIS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const fmt=n=>(parseFloat(n)||0).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
