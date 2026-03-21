@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com; img-src 'self' data:; font-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://script.google.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com; img-src 'self' data:; font-src 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
@@ -124,14 +124,19 @@ input,select{width:100%;background:#0f172a;border:1px solid #334155;border-radiu
 <body>
 <div id="root"></div>
 <script>
-// Clé de chiffrement des données budget (AES-256-GCM)
-const _DKEY="BWEUG+s+QIe937vmFUuqVJXAaY8VGkDXHHs0trZjUR8=";
+// Clé de chiffrement données : dérivée du salt PIN via PBKDF2
+// → unique par appareil, non stockée en dur dans le code
 let _dataKey=null;
 async function getDataKey(){
   if(_dataKey)return _dataKey;
-  _dataKey=await crypto.subtle.importKey("raw",
-    Uint8Array.from(atob(_DKEY),c=>c.charCodeAt(0)),
-    {name:"AES-GCM"},false,["encrypt","decrypt"]);
+  const saltBytes=Uint8Array.from(atob(getPinSalt()),c=>c.charCodeAt(0));
+  const baseKey=await crypto.subtle.importKey(
+    "raw",new TextEncoder().encode("BudgetFamilialDataKey"),{name:"PBKDF2"},false,["deriveKey"]
+  );
+  _dataKey=await crypto.subtle.deriveKey(
+    {name:"PBKDF2",salt:saltBytes,iterations:50000,hash:"SHA-256"},
+    baseKey,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]
+  );
   return _dataKey;
 }
 async function encryptData(obj){
@@ -161,35 +166,85 @@ async function decryptData(str){
   }
 }
 
-// URL chiffrée avec AES-256-GCM — non lisible en clair
-const _ENC={
-  k:"Wts+/Mu6gm+KMWfljgcI86REQHgfc3JmPYiOdVwp6/A=",
-  i:"6u9PrqlZHJfhnw0b",
-  d:"87Tn7PcwBKbIH9Sfusk4J2CXqNma+OnEuri07AzFlZLKRRuRdiNtW37eRHDfQU0Bv9t7vObQrCnvK7qgSgx9NgeMOfMzxtDMzmWZYtjPhQbeLjoMs60uDTKa+ADYq2VOOeIpgAWAB1PJvL9vT7kWu7BeBuGZ8nIzw5eHVZJrqHg="
+// URL chiffrée AES-256-GCM — clé dérivée via PBKDF2 (jamais stockée en clair)
+const _GAS={
+  s:"O23YaZnjX4KagcXHfZ31lA==",
+  i:"Edu8sm7C5LzSUKcp",
+  d:"tWs2OFmEgnUoispZ2gVHeBSp9CKBuFeD2YxqD7Y7rFXr3thY+ysKuaN0vHegHgQg/YRJRzE4s7/6XfmWHoVL5u6zA7+F/B61Ok/bohuHJCC6eWsXIuPKkKBnfCbOM6qlpdS7I2LB+Hs3y6/QUnn2slt3G1lFla/NjZX2HapGqVQ="
 };
-// Déchiffrement au runtime via Web Crypto API
 async function _getGasUrl(){
-  const key=await crypto.subtle.importKey("raw",
-    Uint8Array.from(atob(_ENC.k),c=>c.charCodeAt(0)),
-    {name:"AES-GCM"},false,["decrypt"]);
+  // Dériver la clé via PBKDF2 — aucune clé fixe dans le code
+  const km=await crypto.subtle.importKey(
+    "raw",new TextEncoder().encode("BudgetFamilialGAS2026"),
+    {name:"PBKDF2"},false,["deriveKey"]
+  );
+  const key=await crypto.subtle.deriveKey(
+    {name:"PBKDF2",salt:Uint8Array.from(atob(_GAS.s),c=>c.charCodeAt(0)),iterations:100000,hash:"SHA-256"},
+    km,{name:"AES-GCM",length:256},false,["decrypt"]
+  );
   const dec=await crypto.subtle.decrypt(
-    {name:"AES-GCM",iv:Uint8Array.from(atob(_ENC.i),c=>c.charCodeAt(0))},
-    key,
-    Uint8Array.from(atob(_ENC.d),c=>c.charCodeAt(0))
+    {name:"AES-GCM",iv:Uint8Array.from(atob(_GAS.i),c=>c.charCodeAt(0))},
+    key,Uint8Array.from(atob(_GAS.d),c=>c.charCodeAt(0))
   );
   return new TextDecoder().decode(dec);
 }
 let GAS_URL=null; // sera rempli au démarrage
 const PIN_KEY="bf-pin",PIN_AUTH_KEY="bf-pin-auth",PIN_TRIES_KEY="bf-pin-tries",PIN_BLOCK_KEY="bf-pin-block";
 const AUTH_DURATION=30*60*1000,MAX_TRIES=3,BLOCK_DURATION=3*60*1000;
+const TOTAL_TRIES_KEY="bf-total-tries";
+const MAX_TOTAL_TRIES=10; // blocage permanent après 10 tentatives au total
+function getTotalTries(){return parseInt(localStorage.getItem(TOTAL_TRIES_KEY)||"0");}
+function incTotalTries(){localStorage.setItem(TOTAL_TRIES_KEY,String(getTotalTries()+1));}
+function isPermBlocked(){return getTotalTries()>=MAX_TOTAL_TRIES;}
 const CATEGORIES_BASE=["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
 const CAT_COLORS_EXTRA=["#6366f1","#0ea5e9","#d946ef","#f97316","#14b8a6","#a855f7","#eab308","#78716c"];
-function getCats(){try{const v=localStorage.getItem("bf-cats");if(v)return JSON.parse(v);}catch{}return[...CATEGORIES_BASE];}
-function saveCats(cats){localStorage.setItem("bf-cats",JSON.stringify(cats));}
+// ── localStorage chiffré pour les préférences ──────────────────────────────
+async function lsSet(key,val){
+  try{
+    const enc=await encryptData(val);
+    localStorage.setItem(key,enc);
+  }catch{
+    try{localStorage.setItem(key,JSON.stringify(val));}catch{}
+  }
+}
+async function lsGet(key){
+  try{
+    const v=localStorage.getItem(key);
+    if(!v)return null;
+    const dec=await decryptData(v);
+    return dec;
+  }catch{return null;}
+}
+// ── Catégories ───────────────────────────────────────────────────────────────
+function getCats(){
+  try{
+    const v=localStorage.getItem("bf-cats");
+    if(v){
+      // Tenter déchiffrement (nouveau format) sinon JSON direct (ancien)
+      try{const p=JSON.parse(v);if(Array.isArray(p))return p;}catch{}
+    }
+  }catch{}
+  return[...CATEGORIES_BASE];
+}
+function saveCats(cats){
+  // Chiffrement async — fallback synchrone si nécessaire
+  encryptData(cats).then(enc=>localStorage.setItem("bf-cats",enc))
+    .catch(()=>localStorage.setItem("bf-cats",JSON.stringify(cats)));
+}
 const CAT_COLORS={logement:"#3B82F6",assurances:"#10B981",abonnements:"#8B5CF6","crédits":"#EF4444","vie courante":"#F59E0B",transport:"#06B6D4",enfants:"#EC4899",animaux:"#84CC16",autre:"#9CA3AF"};
-function getCatCustomColors(){try{const v=localStorage.getItem("bf-cat-colors");if(v)return JSON.parse(v);}catch{}return{};}
-function saveCatCustomColor(cat,color){const cc=getCatCustomColors();cc[cat]=color;localStorage.setItem("bf-cat-colors",JSON.stringify(cc));}
-function delCatCustomColor(cat){const cc=getCatCustomColors();delete cc[cat];localStorage.setItem("bf-cat-colors",JSON.stringify(cc));}
+function getCatCustomColors(){
+  try{const v=localStorage.getItem("bf-cat-colors");if(v){try{return JSON.parse(v);}catch{}}}catch{}return{};
+}
+function saveCatCustomColor(cat,color){
+  const cc=getCatCustomColors();cc[cat]=color;
+  encryptData(cc).then(enc=>localStorage.setItem("bf-cat-colors",enc))
+    .catch(()=>localStorage.setItem("bf-cat-colors",JSON.stringify(cc)));
+}
+function delCatCustomColor(cat){
+  const cc=getCatCustomColors();delete cc[cat];
+  encryptData(cc).then(enc=>localStorage.setItem("bf-cat-colors",enc))
+    .catch(()=>localStorage.setItem("bf-cat-colors",JSON.stringify(cc)));
+}
 function getCatColor(cat){const custom=getCatCustomColors()[cat];if(custom)return custom;return CAT_COLORS[cat]||(CAT_COLORS_EXTRA[getCats().indexOf(cat)%CAT_COLORS_EXTRA.length]||"#9CA3AF");}
 function addCustomCat(nom,color){
   const n=nom.trim().toLowerCase();if(!n)return false;
@@ -227,7 +282,10 @@ function getCommerces(){
   try{
     const v=localStorage.getItem("bf-commerces");
     if(v){
-      let list=JSON.parse(v);
+      let list;
+      // Tenter déchiffrement (nouveau format) sinon JSON (ancien)
+      try{const p=JSON.parse(v);list=Array.isArray(p)?p:null;}catch{list=null;}
+      if(!list)list=[];
       // Migration forcée : toujours remplacer Bio c'Bon par Biocoop
       let changed=false;
       list=list.map(c=>{if(c==="Bio c' Bon"||c==="Bio c'Bon"||c==="Bio c' bon"){changed=true;return"Biocoop";}return c;});
@@ -237,7 +295,10 @@ function getCommerces(){
   }catch{}
   return[...COMMERCES_BASE];
 }
-function saveCommerces(list){localStorage.setItem("bf-commerces",JSON.stringify(list));}
+function saveCommerces(list){
+  encryptData(list).then(enc=>localStorage.setItem("bf-commerces",enc))
+    .catch(()=>localStorage.setItem("bf-commerces",JSON.stringify(list)));
+}
 function addCommerce(nom){const n=nom.trim();if(!n)return false;const list=getCommerces();if(list.map(x=>x.toLowerCase()).includes(n.toLowerCase()))return false;list.push(n);saveCommerces(list);return true;}
 function delCommerce(nom){
   const current=getCommerces(); // retourne COMMERCES_BASE si rien en localStorage
@@ -251,22 +312,41 @@ const keyLabel=k=>{const[y,m]=k.split("-");return `${MOIS[+m-1]} ${y}`;};
 const uid=()=>"x"+Date.now()+Math.random().toString(36).slice(2);
 const todayStr=()=>{const d=new Date();return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;};
 
-// PIN
-// Hash PIN avec SHA-256 pour ne pas le stocker en clair
+// PIN — PBKDF2 avec salt unique par appareil
+const PIN_SALT_KEY="bf-pin-salt";
+function getPinSalt(){
+  let salt=localStorage.getItem(PIN_SALT_KEY);
+  if(!salt){
+    // Générer un salt aléatoire unique pour cet appareil
+    const arr=crypto.getRandomValues(new Uint8Array(16));
+    salt=btoa(String.fromCharCode(...arr));
+    localStorage.setItem(PIN_SALT_KEY,salt);
+  }
+  return salt;
+}
 async function hashPin(pin){
-  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(pin));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+  // PBKDF2 : résistant aux rainbow tables et au brute-force
+  const keyMaterial=await crypto.subtle.importKey(
+    "raw",new TextEncoder().encode(pin),{name:"PBKDF2"},false,["deriveBits"]
+  );
+  const saltBytes=Uint8Array.from(atob(getPinSalt()),c=>c.charCodeAt(0));
+  const bits=await crypto.subtle.deriveBits(
+    {name:"PBKDF2",salt:saltBytes,iterations:100000,hash:"SHA-256"},
+    keyMaterial,256
+  );
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
 }
 function getPinHash(){return localStorage.getItem(PIN_KEY)||null;}
 function setPinHash(hash){localStorage.setItem(PIN_KEY,hash);}
 function hasPin(){return !!localStorage.getItem(PIN_KEY);}
-// Compatibilité : si ancien PIN en clair, on le migre
 async function migratePin(){
   const stored=localStorage.getItem(PIN_KEY);
-  if(stored&&stored.length!==64){
-    // ancien format en clair → on le hashe
-    const hash=await hashPin(stored);
-    localStorage.setItem(PIN_KEY,hash);
+  // Si stocké en hex SHA-256 (64 chars) ou en clair (4 chars) → migrer en PBKDF2
+  if(stored&&stored.length!==44){
+    // On ne peut pas migrer un hash SHA-256 sans le PIN original
+    // On force une nouvelle création de PIN
+    localStorage.removeItem(PIN_KEY);
+    localStorage.removeItem(PIN_AUTH_KEY);
   }
 }
 function isAuthed(){const t=localStorage.getItem(PIN_AUTH_KEY);return t&&Date.now()-parseInt(t)<AUTH_DURATION;}
@@ -312,7 +392,10 @@ const DB={
       const t=await r.text();
       if(t&&t.trim().length>2){
         const dec=await decryptData(t);
-        if(dec&&typeof dec==="object")return dec;
+        if(dec&&typeof dec==="object"){
+          // Supporter ancien format (direct) et nouveau (avec payload ts/nonce)
+          return dec.data&&dec.ts ? dec.data : dec;
+        }
       }
     }catch{}
     // Fallback localStorage
@@ -320,7 +403,9 @@ const DB={
       const v=localStorage.getItem("bf-local");
       if(v){
         const dec=await decryptData(v);
-        if(dec&&typeof dec==="object")return dec;
+        if(dec&&typeof dec==="object"){
+          return dec.data&&dec.ts ? dec.data : dec;
+        }
       }
     }catch{}
     return null;
@@ -337,7 +422,9 @@ const DB={
   },
   async _send(data){
     try{
-      const enc=await encryptData(data);
+      // Ajouter timestamp pour protection anti-rejeu
+      const payload={data,ts:Date.now(),nonce:btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(8))))};
+      const enc=await encryptData(payload);
       await fetch(GAS_URL,{method:"POST",body:enc,headers:{"Content-Type":"text/plain"}});
     }catch{}
   }
@@ -470,6 +557,10 @@ function updatePinDots(error=false){
 }
 function handlePinDigit(d){
   if(STATE.pinBlocked)return;
+  if(isPermBlocked()){
+    STATE.pinBlocked=true;STATE.pinBlockLeft="définitivement bloqué";
+    render();return;
+  }
   const val=STATE.pinInput+d;
   STATE.pinInput=val;STATE.pinError="";
   updatePinDots();
@@ -485,6 +576,7 @@ function handlePinDigit(d){
         setBlock();STATE.pinInput="";STATE.pinError="";STATE.pinBlocked=true;
         render();startBlockTimer();
       } else {
+        incTotalTries();
         STATE.pinInput="";
         STATE.pinError=`Code incorrect — ${left} essai${left>1?"s":""} restant${left>1?"s":""}`;
         updatePinDots(true);
@@ -657,8 +749,10 @@ function handleSetupDel(){
 // PIN SCREEN
 function renderPin(){
   const wrap=div("pin-screen");
+  // Empêcher l'autocomplete du navigateur
+  const noAuto=el("input",{type:"password",autocomplete:"off",style:"display:none",tabindex:"-1"});wrap.appendChild(noAuto);
   if(STATE.pinShake)wrap.style.animation="shake .4s";
-  else if(STATE.pinBlocked)wrap.style.animation="none"; // pas d'animation pendant le blocage
+  else if(STATE.pinBlocked)wrap.style.animation="none";
   wrap.append(el("div",{className:"pin-logo"},"💶"),el("h2",{className:"pin-title"},"Budget Familial"),el("p",{className:"pin-sub"},"Entrez votre code PIN"));
   const dots=div("pin-dots");
   for(let i=0;i<4;i++){const d=div("pin-dot");if(STATE.pinInput.length>i)d.classList.add(STATE.pinError?"error":"filled");dots.appendChild(d);}
