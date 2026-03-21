@@ -465,18 +465,35 @@ function setState(p){Object.assign(STATE,p);render();}
 function setSilent(p){Object.assign(STATE,p);}
 function notify(msg,err=false){
   clearTimeout(STATE.toastTimer);
-  const t=setTimeout(()=>{STATE.toast=null;render();},2800);
-  // Ne pas appeler setState pour le toast — juste màj STATE + render une seule fois
-  STATE.toast={msg,err};STATE.toastTimer=t;
+  STATE.toast={msg,err};
+  // Si un modal est ouvert, mettre à jour le toast sans recréer tout le DOM
+  if(STATE.modal||STATE.openCourseId){
+    // Injecter/mettre à jour le toast directement dans le DOM
+    let toastEl=document.querySelector('.toast');
+    if(!toastEl){
+      toastEl=document.createElement('div');
+      toastEl.className='toast'+(err?' err':'');
+      document.getElementById('root').appendChild(toastEl);
+    } else {
+      toastEl.className='toast'+(err?' err':'');
+    }
+    toastEl.textContent=msg;
+    STATE.toastTimer=setTimeout(()=>{
+      STATE.toast=null;
+      const t=document.querySelector('.toast');
+      if(t)t.remove();
+    },2800);
+  } else {
+    STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
+    render();
+  }
 }
 function persist(months){
   DB.save(months);
-  // Une seule mise à jour STATE + un seul render
   STATE.months=months;STATE.lastSync=new Date();
-  STATE.toast={msg:"✓ Synchronisé",err:false};
-  clearTimeout(STATE.toastTimer);
-  STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
-  render();
+  notify("✓ Synchronisé");
+  // Ne re-render que si aucun modal ouvert (sinon notify gère le toast seul)
+  if(!STATE.modal&&!STATE.openCourseId) render();
 }
 function updCur(fn){const m=fn(STATE.months[STATE.curKey]);const next={...STATE.months,[STATE.curKey]:m};persist(next);}
 
@@ -565,12 +582,9 @@ function setMonthsAndRender(fn){
   const newMonth=fn(STATE.months[STATE.curKey]);
   const next={...STATE.months,[STATE.curKey]:newMonth};
   DB.save(next);
-  // Un seul render avec toast inclus
   STATE.months=next;STATE.lastSync=new Date();
-  STATE.toast={msg:"✓ Synchronisé",err:false};
-  clearTimeout(STATE.toastTimer);
-  STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
-  render();
+  notify("✓ Synchronisé");
+  if(!STATE.modal&&!STATE.openCourseId) render();
 }
 
 async function createMonth(key,copyKey){
