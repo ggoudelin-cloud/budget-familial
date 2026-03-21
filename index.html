@@ -240,6 +240,7 @@ let STATE={
   changePinStep:0,changePinOld:"",changePinNew:"",changePinInput:"",changePinError:"",
   months:{},curKey:nowKey(),tab:"dashboard",loading:true,lastSync:null,
   modal:null,filtre:"toutes",monthPick:false,toast:null,toastTimer:null,
+  openCourseId:null, // id de la course dont le panneau d'édition est ouvert
 };
 function setState(p){Object.assign(STATE,p);render();}
 function notify(msg,err=false){clearTimeout(STATE.toastTimer);const t=setTimeout(()=>setState({toast:null}),2800);setState({toast:{msg,err},toastTimer:t});}
@@ -271,7 +272,7 @@ async function init(){
     if(d&&Object.keys(d).length>0){
       Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});
       // Ne pas re-render si un formulaire est en cours de saisie
-      if(STATE.modal){
+      if(STATE.modal||STATE.openCourseId){
         STATE.months=d; STATE.lastSync=new Date(); // màj silencieuse sans re-render
       } else {
         setState({months:d,lastSync:new Date()});
@@ -700,31 +701,35 @@ function renderAlimentationCard(data){
     [...sortCourses(courses)].forEach(c=>{
       const row=div("alim-course-row");
       row.style.flexDirection="column";row.style.alignItems="stretch";row.style.gap="0";
+      row.onclick=e=>e.stopPropagation(); // bloquer toute remontée depuis la ligne
 
       // Ligne principale
       const mainLine=div("");mainLine.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:4px 0";
 
       // Date cliquable
-      const dateBtn=el("button",{});
+      const dateBtn=el("button",{type:"button"});
       dateBtn.style.cssText="background:#1e3a5f;border:none;color:#60a5fa;font-size:11px;font-weight:700;padding:2px 6px;border-radius:6px;cursor:pointer;flex-shrink:0";
       dateBtn.textContent=c.date;
       dateBtn.title="Modifier la date";
 
       const lbl=el("span",{className:"alim-course-label"});lbl.textContent=c.label;
       const mnt=el("span",{className:"alim-course-mnt"});mnt.textContent=fmt(c.montant);
-      const del=el("button",{className:"alim-course-del"});del.textContent="✕";del.onclick=()=>delCourse(c.id);
+      const del=el("button",{type:"button",className:"alim-course-del"});del.textContent="✕";
+      del.onclick=e=>{e.stopPropagation();delCourse(c.id);};
       mainLine.append(dateBtn,lbl,mnt,del);
       row.appendChild(mainLine);
 
       // Panneau édition date (caché par défaut)
       const editPanel=div("");
-      editPanel.style.cssText="display:none;background:#0f172a;border-radius:8px;padding:10px;margin-bottom:6px;gap:8px;flex-direction:column";
+      editPanel.style.cssText=`display:${STATE.openCourseId===c.id?"flex":"none"};background:#0f172a;border-radius:8px;padding:10px;margin-bottom:6px;gap:8px;flex-direction:column`;
+      editPanel.onclick=e=>e.stopPropagation();
 
       // Sélecteur de jour
       const dateRow=div("");dateRow.style.cssText="display:flex;align-items:center;gap:8px";
       const dateLbl=el("span",{style:"color:#64748b;font-size:12px;flex-shrink:0"});dateLbl.textContent="Jour :";
       const dateSel=el("select",{});
       dateSel.style.cssText="flex:1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:6px 10px;color:#f1f5f9;font-size:14px";
+      dateSel.onclick=e=>e.stopPropagation();
       dayOptions.forEach(d=>{
         const o=el("option",{value:d});o.textContent=d;
         if(d===c.date)o.selected=true;
@@ -737,6 +742,7 @@ function renderAlimentationCard(data){
       const mntLbl=el("span",{style:"color:#64748b;font-size:12px;flex-shrink:0"});mntLbl.textContent="Montant :";
       const mntInp=el("input",{type:"number",step:"0.01",value:c.montant});
       mntInp.style.cssText="flex:1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:6px 10px;color:#f1f5f9;font-size:14px";
+      mntInp.onclick=e=>e.stopPropagation();
       mntRow.append(mntLbl,mntInp);
 
       // Boutons valider / annuler
@@ -745,12 +751,13 @@ function renderAlimentationCard(data){
       saveB.style.cssText="flex:1;background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
       saveB.onclick=e=>{
         e.stopPropagation();
+        STATE.openCourseId=null;
         updateCourse(c.id,{date:dateSel.value,montant:parseFloat(mntInp.value)||c.montant});
         editPanel.style.display="none";
       };
       const cancelB=el("button",{type:"button"});cancelB.textContent="Annuler";
       cancelB.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
-      cancelB.onclick=e=>{e.stopPropagation();editPanel.style.display="none";};
+      cancelB.onclick=e=>{e.stopPropagation();STATE.openCourseId=null;editPanel.style.display="none";};
       editBtns.append(saveB,cancelB);
 
       editPanel.append(dateRow,mntRow,editBtns);
@@ -759,7 +766,8 @@ function renderAlimentationCard(data){
       // Toggle panneau au clic sur la date
       dateBtn.onclick=e=>{
         e.stopPropagation();
-        const isOpen=editPanel.style.display==="flex";
+        const isOpen=STATE.openCourseId===c.id;
+        STATE.openCourseId=isOpen?null:c.id;
         editPanel.style.display=isOpen?"none":"flex";
       };
 
