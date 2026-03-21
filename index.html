@@ -439,10 +439,12 @@ let _pendingSave=null; // données en attente d'envoi vers GAS
 
 const DB={
   async load(){
+    console.log("[DB.load] Début chargement...");
     // 1) Google Sheets en priorité — source de vérité partagée
     try{
       const r=await fetch(GAS_URL,{redirect:"follow"});
       const t=await r.text();
+      console.log("[DB.load] GAS répond, taille:", t.length, "chars, début:", t.substring(0,50));
       if(t&&t.trim().length>2){
         // Tenter déchiffrement (ancien format)
         try{
@@ -451,6 +453,7 @@ const DB={
             const raw=dec.data&&dec.ts?dec.data:dec;
             const d=extractAndRestore(raw);
             if(d&&Object.keys(d).length>0){
+              console.log("[DB.load] ✅ Données GAS chiffrées OK, mois:", Object.keys(d).join(','));
               try{const enc=await encryptData(raw);localStorage.setItem("bf-local",enc);}catch{}
               try{localStorage.setItem("bf-local-json",JSON.stringify(raw));}catch{}
               return d;
@@ -463,6 +466,7 @@ const DB={
           if(p&&typeof p==="object"&&!Array.isArray(p)&&Object.keys(p).length>0){
             const d=extractAndRestore(p);
             if(d){
+              console.log("[DB.load] ✅ Données GAS JSON brut OK, mois:", Object.keys(d).join(','));
               try{const enc=await encryptData(p);localStorage.setItem("bf-local",enc);}catch{}
               try{localStorage.setItem("bf-local-json",JSON.stringify(p));}catch{}
               return d;
@@ -471,6 +475,7 @@ const DB={
         }catch{}
       }
     }catch{}
+    console.log("[DB.load] ⚠️ GAS échoué, fallback localStorage...");
     // 2) Fallback localStorage chiffré
     try{
       const v=localStorage.getItem("bf-local");
@@ -486,6 +491,7 @@ const DB={
         try{const p=JSON.parse(v);const d=extractAndRestore(p);if(d&&Object.keys(d).length>0)return d;}catch{}
       }
     }catch{}
+    console.log("[DB.load] ⚠️ localStorage chiffré échoué, fallback JSON sync...");
     // 3) Dernier recours : JSON synchrone
     try{
       const v=localStorage.getItem("bf-local-json");
@@ -521,15 +527,18 @@ const DB={
   },
 
   async _send(data){
+    const moisKeys=Object.keys(data).filter(k=>k.match(/^\d{4}-\d{2}$/));
+    console.log("[DB._send] Envoi GAS, mois:", moisKeys.join(','), "meta:", !!data._meta);
     try{
       await fetch(GAS_URL,{
         method:"POST",
         body:JSON.stringify(data),
         headers:{"Content-Type":"text/plain"}
       });
+      console.log("[DB._send] ✅ Envoi GAS réussi");
       _pendingSave=null; // envoi réussi
     }catch{
-      // Retry dans 5s si échec réseau
+      console.error("[DB._send] ❌ Échec envoi GAS, retry dans 5s");
       setTimeout(()=>{if(_pendingSave)DB._send(_pendingSave);},5000);
     }
   },
