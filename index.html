@@ -248,7 +248,12 @@ async function init(){
     const d=await DB.load();
     if(d&&Object.keys(d).length>0){
       Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});
-      setState({months:d,lastSync:new Date()});
+      // Ne pas re-render si un formulaire est en cours de saisie
+      if(STATE.modal){
+        STATE.months=d; STATE.lastSync=new Date(); // màj silencieuse sans re-render
+      } else {
+        setState({months:d,lastSync:new Date()});
+      }
     }
   },15000);
 }
@@ -671,7 +676,9 @@ function renderModal(modal,data,months,allKeys){
 
   // ── Ajouter une course ──
   if(modal.type==="addCourse"){
-    let commerce=getCommerces()[0]||"Courses",montant="";
+    // Persister les valeurs du formulaire dans STATE
+    if(!STATE.courseForm)STATE.courseForm={commerce:getCommerces()[0]||"Courses",montant:""};
+    const cf=STATE.courseForm;
     const courses=data.courses||[];
     const budget=data.depenses.find(d=>d.type==="Alimentation")?.montant||800;
     const dejaDepense=courses.reduce((a,c)=>a+(+c.montant||0),0);
@@ -694,16 +701,15 @@ function renderModal(modal,data,months,allKeys){
       commerceList.innerHTML="";
       getCommerces().forEach(c=>{
         const btn=div("");
-        btn.style.cssText=`padding:6px 12px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${c===commerce?"#3B82F6":"#334155"};background:${c===commerce?"#1d4ed8":"transparent"};color:${c===commerce?"#fff":"#94a3b8"};transition:all .15s`;
+        btn.style.cssText=`padding:6px 12px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${c===cf.commerce?"#3B82F6":"#334155"};background:${c===cf.commerce?"#1d4ed8":"transparent"};color:${c===cf.commerce?"#fff":"#94a3b8"};transition:all .15s`;
         btn.textContent=c;
-        btn.onclick=e=>{e.stopPropagation();commerce=c;renderCommerces();};
-        // Bouton supprimer sur les commerces non-base
+        btn.onclick=e=>{e.stopPropagation();cf.commerce=c;renderCommerces();};
         if(!COMMERCES_BASE.includes(c)){
           const del=el("span",{});del.textContent=" ✕";del.style.cssText="font-size:10px;opacity:.7;cursor:pointer";
           del.onclick=e=>{
             e.stopPropagation();
             delCommerce(c);
-            if(commerce===c)commerce=getCommerces()[0]||"Courses";
+            if(cf.commerce===c)cf.commerce=getCommerces()[0]||"Courses";
             renderCommerces();
           };
           btn.appendChild(del);
@@ -726,12 +732,12 @@ function renderModal(modal,data,months,allKeys){
       const nom=newCommerceInp.value.trim();
       if(!nom)return;
       if(addCommerce(nom)){
-        commerce=nom;
+        cf.commerce=nom;
         renderCommerces();
         newCommerceInp.value="";
         notify("✓ Commerce ajouté !");
       } else {
-        notify("Ce commerce existe déjà","err");
+        notify("Ce commerce existe déjà");
       }
     };
     newCommerceWrap.append(newCommerceInp,newCommerceBtn);
@@ -740,14 +746,16 @@ function renderModal(modal,data,months,allKeys){
 
     // Montant
     m.appendChild(el("label",{style:"margin-top:12px"},"Montant (€)"));
-    const mi=el("input",{type:"number",step:"0.01",value:"",placeholder:"0.00"});mi.style.marginTop="4px";
+    const mi=el("input",{type:"number",step:"0.01",value:cf.montant||"",placeholder:"0.00"});mi.style.marginTop="4px";
 
     // Reste après
     const resteApresBox=div("");resteApresBox.style.cssText="background:#0f172a;border-radius:8px;padding:12px;margin-top:12px;text-align:center";
-    resteApresBox.innerHTML=`<div style="font-size:11px;color:#64748b;margin-bottom:4px">Reste après cette course</div><div style="font-size:22px;font-weight:900;color:#10B981">${fmt(resteAvant)}</div>`;
+    const apresInit=resteAvant-(parseFloat(cf.montant)||0);
+    const okInit=apresInit>=0;
+    resteApresBox.innerHTML=`<div style="font-size:11px;color:#64748b;margin-bottom:4px">Reste après cette course</div><div style="font-size:22px;font-weight:900;color:${okInit?"#10B981":"#EF4444"}">${okInit?fmt(apresInit):"−"+fmt(Math.abs(apresInit))}</div>`;
     mi.oninput=e=>{
-      montant=e.target.value;
-      const apres=resteAvant-(parseFloat(montant)||0);
+      cf.montant=e.target.value;
+      const apres=resteAvant-(parseFloat(cf.montant)||0);
       const ok=apres>=0;
       resteApresBox.innerHTML=`<div style="font-size:11px;color:#64748b;margin-bottom:4px">Reste après cette course</div><div style="font-size:22px;font-weight:900;color:${ok?"#10B981":"#EF4444"}">${ok?fmt(apres):"−"+fmt(Math.abs(apres))}</div>${!ok?'<div style="font-size:11px;color:#EF4444;margin-top:4px">⚠ Budget dépassé !</div>':""}`;
     };
@@ -756,8 +764,8 @@ function renderModal(modal,data,months,allKeys){
 
     const btns=div("mbtns");
     const sv=el("button",{className:"b-save"});sv.textContent="✓ Ajouter";
-    sv.onclick=e=>{e.stopPropagation();if(montant)addCourse(commerce,montant);};
-    const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null});
+    sv.onclick=e=>{e.stopPropagation();if(cf.montant){addCourse(cf.commerce,cf.montant);STATE.courseForm=null;}};
+    const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>{STATE.courseForm=null;setState({modal:null});};
     btns.append(sv,ca);m.appendChild(btns);
   }
 
@@ -781,12 +789,27 @@ function renderModal(modal,data,months,allKeys){
 
   // ── Edit / Add ──
   else if(modal.type==="edit"||modal.type==="add"){
-    const{itemType,item:orig}=modal;let item={...orig};const isEdit=modal.type==="edit";
+    // On stocke l'item dans STATE.modalItem pour survivre aux re-renders (sync 15s)
+    if(!STATE.modalItem||STATE.modalItem._modalId!==modal._modalId){
+      STATE.modalItem={...modal.item, _modalId:modal._modalId||uid()};
+      modal._modalId=STATE.modalItem._modalId;
+    }
+    const item=STATE.modalItem;
+    const isEdit=modal.type==="edit";
     const titles={depense:isEdit?"Modifier la dépense":"Nouvelle dépense",salaire:"Modifier le salaire",economie:isEdit?"Modifier l'épargne":"Nouvelle ligne d'épargne",poche:"Argent de poche"};
-    m.appendChild(el("h2",{className:"mt"},titles[itemType]||"Modifier"));
+    m.appendChild(el("h2",{className:"mt"},titles[modal.itemType]||"Modifier"));
+    const itemType=modal.itemType;
     if(itemType==="salaire"||itemType==="poche"){const p=el("p",{style:"color:#94a3b8;font-size:14px;margin-bottom:4px"});p.textContent=item.prenom;m.appendChild(p);}
-    if(itemType==="depense"||itemType==="economie"){m.appendChild(el("label",{},"Libellé"));m.appendChild(inp("text",item.type,v=>{item.type=v;},"ex: Cinéma"));}
-    m.appendChild(el("label",{},"Montant (€)"));m.appendChild(inp("number",item.montant,v=>{item.montant=v;}));
+    if(itemType==="depense"||itemType==="economie"){
+      m.appendChild(el("label",{},"Libellé"));
+      const libelleInp=el("input",{type:"text",value:item.type||"",placeholder:"ex: Cinéma"});
+      libelleInp.oninput=e=>{item.type=e.target.value;};
+      m.appendChild(libelleInp);
+    }
+    m.appendChild(el("label",{},"Montant (€)"));
+    const montantInp=el("input",{type:"number",step:"0.01",value:item.montant||""});
+    montantInp.oninput=e=>{item.montant=e.target.value;};
+    m.appendChild(montantInp);
     if(itemType==="depense"){
       m.appendChild(el("label",{},"Catégorie"));
       const catWrap=div("");catWrap.style.cssText="display:flex;flex-direction:column;gap:8px;margin-top:4px";
@@ -879,9 +902,11 @@ function renderModal(modal,data,months,allKeys){
       catWrap.append(catSel,newCatWrap);m.appendChild(catWrap);
     }
     const btns=div("mbtns");
-    const sv=el("button",{className:"b-save"});sv.textContent="Sauvegarder";sv.onclick=()=>isEdit?saveItem(itemType,item):addItem(itemType,item);btns.appendChild(sv);
-    if(isEdit&&(itemType==="depense"||itemType==="economie")){const d=el("button",{className:"b-del"});d.textContent="🗑";d.onclick=()=>delItem(itemType,item.id);btns.appendChild(d);}
-    const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null});btns.appendChild(ca);m.appendChild(btns);
+    const sv=el("button",{className:"b-save"});sv.textContent="Sauvegarder";
+    sv.onclick=()=>{STATE.modalItem=null;isEdit?saveItem(itemType,item):addItem(itemType,item);};
+    btns.appendChild(sv);
+    if(isEdit&&(itemType==="depense"||itemType==="economie")){const d=el("button",{className:"b-del"});d.textContent="🗑";d.onclick=()=>{STATE.modalItem=null;delItem(itemType,item.id);};btns.appendChild(d);}
+    const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>{STATE.modalItem=null;setState({modal:null});};btns.appendChild(ca);m.appendChild(btns);
   }
 
   // ── Nouveau mois ──
