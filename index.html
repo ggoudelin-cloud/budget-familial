@@ -112,9 +112,27 @@ input,select{width:100%;background:#0f172a;border:1px solid #334155;border-radiu
 <body>
 <div id="root"></div>
 <script>
-const GAS_URL="https://script.google.com/macros/s/AKfycby0_v0SAuFnxUGBLPo4XzTYDy5Z0Hsnltao6pcZgTFS06X06KhFzy-jndgvHTEQpduH/exec";
+// URL chiffrée avec AES-256-GCM — non lisible en clair
+const _ENC={
+  k:"Wts+/Mu6gm+KMWfljgcI86REQHgfc3JmPYiOdVwp6/A=",
+  i:"6u9PrqlZHJfhnw0b",
+  d:"87Tn7PcwBKbIH9Sfusk4J2CXqNma+OnEuri07AzFlZLKRRuRdiNtW37eRHDfQU0Bv9t7vObQrCnvK7qgSgx9NgeMOfMzxtDMzmWZYtjPhQbeLjoMs60uDTKa+ADYq2VOOeIpgAWAB1PJvL9vT7kWu7BeBuGZ8nIzw5eHVZJrqHg="
+};
+// Déchiffrement au runtime via Web Crypto API
+async function _getGasUrl(){
+  const key=await crypto.subtle.importKey("raw",
+    Uint8Array.from(atob(_ENC.k),c=>c.charCodeAt(0)),
+    {name:"AES-GCM"},false,["decrypt"]);
+  const dec=await crypto.subtle.decrypt(
+    {name:"AES-GCM",iv:Uint8Array.from(atob(_ENC.i),c=>c.charCodeAt(0))},
+    key,
+    Uint8Array.from(atob(_ENC.d),c=>c.charCodeAt(0))
+  );
+  return new TextDecoder().decode(dec);
+}
+let GAS_URL=null; // sera rempli au démarrage
 const PIN_KEY="bf-pin",PIN_AUTH_KEY="bf-pin-auth",PIN_TRIES_KEY="bf-pin-tries",PIN_BLOCK_KEY="bf-pin-block";
-const DEFAULT_PIN="7369",AUTH_DURATION=30*60*1000,MAX_TRIES=3,BLOCK_DURATION=3*60*1000;
+const AUTH_DURATION=30*60*1000,MAX_TRIES=3,BLOCK_DURATION=3*60*1000;
 const CATEGORIES_BASE=["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
 const CAT_COLORS_EXTRA=["#6366f1","#0ea5e9","#d946ef","#f97316","#14b8a6","#a855f7","#eab308","#78716c"];
 function getCats(){try{const v=localStorage.getItem("bf-cats");if(v)return JSON.parse(v);}catch{}return[...CATEGORIES_BASE];}
@@ -185,8 +203,23 @@ const uid=()=>"x"+Date.now()+Math.random().toString(36).slice(2);
 const todayStr=()=>{const d=new Date();return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;};
 
 // PIN
-function getPin(){return localStorage.getItem(PIN_KEY)||DEFAULT_PIN;}
-function setPin(p){localStorage.setItem(PIN_KEY,p);}
+// Hash PIN avec SHA-256 pour ne pas le stocker en clair
+async function hashPin(pin){
+  const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(pin));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function getPinHash(){return localStorage.getItem(PIN_KEY)||null;}
+function setPinHash(hash){localStorage.setItem(PIN_KEY,hash);}
+function hasPin(){return !!localStorage.getItem(PIN_KEY);}
+// Compatibilité : si ancien PIN en clair, on le migre
+async function migratePin(){
+  const stored=localStorage.getItem(PIN_KEY);
+  if(stored&&stored.length!==64){
+    // ancien format en clair → on le hashe
+    const hash=await hashPin(stored);
+    localStorage.setItem(PIN_KEY,hash);
+  }
+}
 function isAuthed(){const t=localStorage.getItem(PIN_AUTH_KEY);return t&&Date.now()-parseInt(t)<AUTH_DURATION;}
 function setAuthed(){localStorage.setItem(PIN_AUTH_KEY,String(Date.now()));}
 function getTries(){return parseInt(localStorage.getItem(PIN_TRIES_KEY)||"0");}
@@ -238,7 +271,9 @@ const DB={
 
 // STATE
 let STATE={
-  screen:"pin",pinInput:"",pinError:"",pinShake:false,pinBlocked:false,pinBlockLeft:0,
+  screen:"pin", // "pin" | "setup" | "app"
+  setupStep:0,setupPin:"",setupConfirm:"",setupInput:"",setupError:"",
+  pinInput:"",pinError:"",pinShake:false,pinBlocked:false,pinBlockLeft:0,
   changePinStep:0,changePinOld:"",changePinNew:"",changePinInput:"",changePinError:"",
   months:{},curKey:nowKey(),tab:"dashboard",loading:true,lastSync:null,
   modal:null,filtre:"toutes",monthPick:false,toast:null,toastTimer:null,
@@ -366,10 +401,11 @@ function handlePinDigit(d){
   updatePinDots();
   if(val.length===4){
     if(Date.now()<getBlockUntil()){STATE.pinBlocked=true;STATE.pinInput="";render();startBlockTimer();return;}
-    if(val===getPin()){
-      clearBlock();setAuthed();STATE.pinInput="";STATE.pinError="";
-      setState({screen:"app"});init();
-    } else {
+    hashPin(val).then(hash=>{
+      if(hash===getPinHash()){
+        clearBlock();setAuthed();STATE.pinInput="";STATE.pinError="";
+        setState({screen:"app"});init();
+      } else {
       const tries=getTries()+1;setTries(tries);const left=MAX_TRIES-tries;
       if(tries>=MAX_TRIES){
         setBlock();STATE.pinInput="";STATE.pinError="";STATE.pinBlocked=true;
@@ -381,6 +417,7 @@ function handlePinDigit(d){
         setTimeout(()=>{STATE.pinError="";updatePinDots();},800);
       }
     }
+    }); // fin hashPin
   }
 }
 function handlePinDel(){
@@ -441,7 +478,7 @@ function handleChangePinDigit(d){
     }
     else if(STATE.changePinStep===3){
       if(val===STATE.changePinNew){
-        setPin(val);STATE.changePinStep=0;STATE.changePinInput="";STATE.changePinError="";
+        hashPin(val).then(h=>{setPinHash(h);});STATE.changePinStep=0;STATE.changePinInput="";STATE.changePinError="";
         setState({modal:null});notify("✓ Code PIN modifié !");
       } else {
         STATE.changePinInput="";STATE.changePinError="Les codes ne correspondent pas";
@@ -469,9 +506,78 @@ function sel(val,opts,onChange){const s=el("select",{});s.onchange=e=>onChange(e
 
 function render(){
   const root=document.getElementById("root");root.innerHTML="";
+  if(STATE.screen==="setup"){root.appendChild(renderSetup());return;}
   if(STATE.screen==="pin"){root.appendChild(renderPin());return;}
   if(STATE.loading){root.appendChild(div("loader",div("spinner"),el("p",{style:"color:#94a3b8;margin-top:14px"},"Chargement…")));return;}
   root.appendChild(renderApp());
+}
+
+// SETUP SCREEN — création du PIN au premier lancement
+function renderSetup(){
+  const wrap=div("pin-screen");
+  const steps=["","Choisissez votre code PIN (4 chiffres)","Confirmez votre code PIN"];
+  wrap.append(
+    el("div",{className:"pin-logo"},"💶"),
+    el("h2",{className:"pin-title"},"Budget Familial"),
+    el("p",{className:"pin-sub",style:"color:#10B981;font-weight:700"},"🔐 Premier lancement"),
+    el("p",{className:"pin-sub"},(steps[STATE.setupStep+1]||"Choisissez votre PIN"))
+  );
+  const dots=div("pin-dots");
+  for(let i=0;i<4;i++){
+    const d=div("pin-dot");
+    if(STATE.setupInput.length>i)d.classList.add("filled");
+    dots.appendChild(d);
+  }
+  wrap.appendChild(dots);
+  const err=el("p",{className:"pin-error"});err.textContent=STATE.setupError||"";wrap.appendChild(err);
+  const grid=div("pin-grid");
+  ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
+    if(d===""){grid.appendChild(div("pin-btn empty"));return;}
+    const b=div("pin-btn"+(d==="⌫"?" del":""));b.textContent=d;
+    b.onclick=()=>d==="⌫"?handleSetupDel():handleSetupDigit(d);
+    grid.appendChild(b);
+  });
+  wrap.appendChild(grid);
+  return wrap;
+}
+function updateSetupDots(){
+  const dots=document.querySelectorAll(".pin-screen .pin-dot");
+  if(!dots.length)return;
+  dots.forEach((dot,i)=>{dot.className="pin-dot";if(STATE.setupInput.length>i)dot.classList.add("filled");});
+  const errEl=document.querySelector(".pin-screen .pin-error");
+  if(errEl)errEl.textContent=STATE.setupError||"";
+}
+function handleSetupDigit(d){
+  const val=STATE.setupInput+d;
+  STATE.setupInput=val;STATE.setupError="";
+  updateSetupDots();
+  if(val.length===4){
+    if(STATE.setupStep===0){
+      // Étape 1 : saisie du PIN
+      STATE.setupPin=val;STATE.setupStep=1;STATE.setupInput="";
+      render(); // recrée l'écran avec le nouveau message
+    } else {
+      // Étape 2 : confirmation
+      if(val===STATE.setupPin){
+        hashPin(val).then(hash=>{
+          setPinHash(hash);
+          setAuthed();
+          STATE.setupStep=0;STATE.setupInput="";STATE.setupError="";
+          setState({screen:"app"});
+          init();
+          notify("✅ Code PIN créé !");
+        });
+      } else {
+        STATE.setupStep=0;STATE.setupPin="";STATE.setupInput="";
+        STATE.setupError="Les codes ne correspondent pas — recommencez";
+        render();
+      }
+    }
+  }
+}
+function handleSetupDel(){
+  STATE.setupInput=STATE.setupInput.slice(0,-1);
+  updateSetupDots();
 }
 
 // PIN SCREEN
@@ -1288,8 +1394,18 @@ function renderModal(modal,data,months,allKeys){
 }
 
 // START
-if(isAuthed()){setState({screen:"app"});init();}
-else setState({screen:"pin"});
+(async()=>{
+  // Déchiffrer l'URL Google Apps Script
+  GAS_URL = await _getGasUrl();
+  await migratePin();
+  if(!hasPin()){
+    setState({screen:"setup",setupStep:0,setupInput:"",setupError:""});
+  } else if(isAuthed()){
+    setState({screen:"app"});init();
+  } else {
+    setState({screen:"pin"});
+  }
+})();
 </script>
 </body>
 </html>
