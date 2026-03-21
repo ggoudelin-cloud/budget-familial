@@ -120,15 +120,48 @@ const CAT_COLORS_EXTRA=["#6366f1","#0ea5e9","#d946ef","#f97316","#14b8a6","#a855
 function getCats(){try{const v=localStorage.getItem("bf-cats");if(v)return JSON.parse(v);}catch{}return[...CATEGORIES_BASE];}
 function saveCats(cats){localStorage.setItem("bf-cats",JSON.stringify(cats));}
 const CAT_COLORS={logement:"#3B82F6",assurances:"#10B981",abonnements:"#8B5CF6","crédits":"#EF4444","vie courante":"#F59E0B",transport:"#06B6D4",enfants:"#EC4899",animaux:"#84CC16",autre:"#9CA3AF"};
-function getCatColor(cat){return CAT_COLORS[cat]||(CAT_COLORS_EXTRA[getCats().indexOf(cat)%CAT_COLORS_EXTRA.length]||"#9CA3AF");}
-function addCustomCat(nom){
+function getCatCustomColors(){try{const v=localStorage.getItem("bf-cat-colors");if(v)return JSON.parse(v);}catch{}return{};}
+function saveCatCustomColor(cat,color){const cc=getCatCustomColors();cc[cat]=color;localStorage.setItem("bf-cat-colors",JSON.stringify(cc));}
+function delCatCustomColor(cat){const cc=getCatCustomColors();delete cc[cat];localStorage.setItem("bf-cat-colors",JSON.stringify(cc));}
+function getCatColor(cat){const custom=getCatCustomColors()[cat];if(custom)return custom;return CAT_COLORS[cat]||(CAT_COLORS_EXTRA[getCats().indexOf(cat)%CAT_COLORS_EXTRA.length]||"#9CA3AF");}
+function addCustomCat(nom,color){
   const n=nom.trim().toLowerCase();if(!n)return false;
   const cats=getCats();if(cats.includes(n))return false;
-  cats.push(n);saveCats(cats);return true;
+  cats.push(n);saveCats(cats);
+  if(color)saveCatCustomColor(n,color);
+  return true;
 }
 function delCustomCat(nom){
-  const cats=getCats().filter(c=>CATEGORIES_BASE.includes(c)||c!==nom);saveCats(cats);
+  const cats=getCats().filter(c=>c!==nom);saveCats(cats);
+  delCatCustomColor(nom);
 }
+function delCatAndReassign(nom){
+  // Supprimer la catégorie
+  delCustomCat(nom);
+  // Réaffecter toutes les dépenses de cette catégorie à "autre" dans TOUS les mois
+  const months=STATE.months;
+  let changed=false;
+  Object.keys(months).forEach(k=>{
+    const m=months[k];
+    const newDeps=m.depenses.map(d=>{
+      if(d.categorie===nom){changed=true;return{...d,categorie:"autre"};}
+      return d;
+    });
+    months[k]={...m,depenses:newDeps};
+  });
+  if(changed){
+    DB.save(months);
+    STATE.months={...months};
+    notify("✓ Catégorie supprimée — dépenses réaffectées à \"autre\"");
+  } else {
+    notify("✓ Catégorie supprimée");
+  }
+}
+const COMMERCES_BASE=["Leclerc","Lidl","Aldi","Carrefour","Intermarché","Super U","Casino","Monoprix","Franprix","Picard","Bio c' Bon","Grand Frais"];
+function getCommerces(){try{const v=localStorage.getItem("bf-commerces");if(v)return JSON.parse(v);}catch{}return[...COMMERCES_BASE];}
+function saveCommerces(list){localStorage.setItem("bf-commerces",JSON.stringify(list));}
+function addCommerce(nom){const n=nom.trim();if(!n)return false;const list=getCommerces();if(list.map(x=>x.toLowerCase()).includes(n.toLowerCase()))return false;list.push(n);saveCommerces(list);return true;}
+function delCommerce(nom){saveCommerces(getCommerces().filter(c=>c!==nom));}
 const MOIS=["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const fmt=n=>(parseFloat(n)||0).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
 const nowKey=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;};
@@ -347,7 +380,13 @@ function renderApp(){
   const totSal=data.salaires.reduce((a,x)=>a+(+x.montant||0),0);
   const totDep=data.depenses.reduce((a,x)=>a+(+x.montant||0),0);
   const totEco=data.economies.reduce((a,x)=>a+(+x.montant||0),0);
-  const paye=data.depenses.filter(d=>d.paye).reduce((a,x)=>a+(+x.montant||0),0);
+  // Courses réellement dépensées (comptent comme "payé" pour l'alimentation)
+  const totalCourses=(data.courses||[]).reduce((a,x)=>a+(+x.montant||0),0);
+  const budgetAlim=data.depenses.find(d=>d.type==="Alimentation")?.montant||0;
+  // Paye = dépenses cochées (hors alimentation) + courses réelles (plafonnées au budget alim)
+  const payeHorsAlim=data.depenses.filter(d=>d.paye&&d.type!=="Alimentation").reduce((a,x)=>a+(+x.montant||0),0);
+  const alimentPaye=Math.min(totalCourses, budgetAlim);
+  const paye=payeHorsAlim+alimentPaye;
   const solde=totSal-totDep-totEco;
   const wrap=div("");
 
@@ -396,7 +435,9 @@ function renderDashboard(data,totSal,totDep,totEco,paye,solde){
   const pct=totDep>0?Math.round((paye/totDep)*100):0;
   const byCat={};data.depenses.forEach(d=>{byCat[d.categorie]=(byCat[d.categorie]||0)+(+d.montant||0);});
   const murSal=data.salaires.find(x=>x.prenom==="Murielle")?.montant||0;
-  const murPoche=data.argentPoche.find(x=>x.prenom==="Murielle")?.montant||0;
+  const gillesSal=data.salaires.find(x=>x.prenom==="Gilles")?.montant||0;
+  // Argent de poche calculé automatiquement = solde restant ÷ 2
+  const pocheCalculee=Math.max(0,solde)/2;
   const col=div("col");
 
   // Kartes
@@ -443,12 +484,44 @@ function renderDashboard(data,totSal,totDep,totEco,paye,solde){
   if(data.economies.length){const et2=div("li");et2.style.cssText="border-top:1px solid #334155;margin-top:6px;padding-top:10px;border-bottom:none";et2.innerHTML=`<span style="color:#94a3b8;font-weight:700">Total</span><span style="color:#F59E0B;font-weight:800;font-size:16px">${fmt(totEco)}</span>`;ec.appendChild(et2);}
   col.appendChild(ec);
 
-  // Argent de poche
+  // Argent de poche (calculé automatiquement)
   const pcc=div("card");pcc.appendChild(el("h3",{className:"ct"},"Argent de poche"));
-  data.argentPoche.forEach(x=>{const li=div("li");li.append(el("span",{style:"color:#cbd5e1"},x.prenom),iedit(fmt(x.montant),"#8B5CF6",()=>setState({modal:{type:"edit",itemType:"poche",item:{...x}}})));pcc.appendChild(li);});
-  const vd=div("");vd.style.cssText="border-top:1px solid #334155;margin-top:8px;padding-top:10px";
-  vd.innerHTML=`<div class="li"><span style="color:#94a3b8;font-size:13px">Virement → Murielle</span><span style="color:#3B82F6;font-weight:800;font-size:15px">${fmt(murSal-murPoche)}</span></div>`;
-  pcc.appendChild(vd);col.appendChild(pcc);
+
+  // Détail du calcul
+  const calcDetail=div("");calcDetail.style.cssText="background:#0f172a;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:#64748b;line-height:1.8";
+  calcDetail.innerHTML=`
+    <div style="display:flex;justify-content:space-between"><span>Salaires</span><span style="color:#10B981;font-weight:700">+ ${fmt(totSal)}</span></div>
+    <div style="display:flex;justify-content:space-between"><span>Dépenses fixes</span><span style="color:#EF4444;font-weight:700">− ${fmt(totDep)}</span></div>
+    <div style="display:flex;justify-content:space-between"><span>Épargne</span><span style="color:#F59E0B;font-weight:700">− ${fmt(totEco)}</span></div>
+    <div style="display:flex;justify-content:space-between;border-top:1px solid #334155;margin-top:6px;padding-top:6px"><span style="color:#f1f5f9;font-weight:700">Solde disponible</span><span style="color:${solde>=0?"#3B82F6":"#EF4444"};font-weight:800">${fmt(solde)}</span></div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px"><span style="color:#8B5CF6;font-weight:700">÷ 2 personnes</span><span style="color:#8B5CF6;font-weight:800">= ${fmt(pocheCalculee)} chacun</span></div>
+  `;
+  pcc.appendChild(calcDetail);
+
+  // Ligne par personne
+  data.argentPoche.forEach(x=>{
+    const li=div("li");
+    const nameEl=el("span",{style:"color:#cbd5e1"});nameEl.textContent=x.prenom;
+    const montantEl=el("span",{style:"color:#8B5CF6;font-weight:800;font-size:16px"});
+    montantEl.textContent=fmt(pocheCalculee);
+    li.append(nameEl,montantEl);
+    pcc.appendChild(li);
+  });
+
+  // Virement Murielle = son salaire − sa part d'argent de poche
+  const virDiv=div("");virDiv.style.cssText="border-top:1px solid #334155;margin-top:8px;padding-top:10px";
+  const virLi=div("li");
+  const virMontant=murSal-pocheCalculee;
+  virLi.innerHTML=`
+    <div>
+      <div style="color:#94a3b8;font-size:13px">Virement → Murielle</div>
+      <div style="color:#64748b;font-size:11px">Salaire Murielle (${fmt(murSal)}) − poche (${fmt(pocheCalculee)})</div>
+    </div>
+    <span style="color:#3B82F6;font-weight:800;font-size:15px">${fmt(virMontant)}</span>
+  `;
+  virDiv.appendChild(virLi);
+  pcc.appendChild(virDiv);
+  col.appendChild(pcc);
   return col;
 }
 
@@ -598,7 +671,7 @@ function renderModal(modal,data,months,allKeys){
 
   // ── Ajouter une course ──
   if(modal.type==="addCourse"){
-    let label="Courses",montant="";
+    let commerce=getCommerces()[0]||"Courses",montant="";
     const courses=data.courses||[];
     const budget=data.depenses.find(d=>d.type==="Alimentation")?.montant||800;
     const dejaDepense=courses.reduce((a,c)=>a+(+c.montant||0),0);
@@ -606,21 +679,72 @@ function renderModal(modal,data,months,allKeys){
 
     m.appendChild(el("h2",{className:"mt"},"🛒 Ajouter des courses"));
 
-    // Info budget en haut
+    // Info budget
     const infoHaut=div("");infoHaut.style.cssText="background:#0f172a;border-radius:8px;padding:10px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center";
-    infoHaut.innerHTML=`<div><div style="font-size:11px;color:#64748b">Budget alimentation</div><div style="font-size:15px;font-weight:800;color:#F59E0B">${fmt(budget)}</div></div><div style="text-align:center"><div style="font-size:11px;color:#64748b">Déjà dépensé</div><div style="font-size:15px;font-weight:800;color:#EF4444">${fmt(dejaDepense)}</div></div><div style="text-align:right"><div style="font-size:11px;color:#64748b">Reste</div><div style="font-size:15px;font-weight:800;color:${resteAvant>=0?"#10B981":"#EF4444"}">${fmt(resteAvant)}</div></div>`;
+    infoHaut.innerHTML=`<div><div style="font-size:11px;color:#64748b">Budget</div><div style="font-size:15px;font-weight:800;color:#F59E0B">${fmt(budget)}</div></div><div style="text-align:center"><div style="font-size:11px;color:#64748b">Dépensé</div><div style="font-size:15px;font-weight:800;color:#EF4444">${fmt(dejaDepense)}</div></div><div style="text-align:right"><div style="font-size:11px;color:#64748b">Reste</div><div style="font-size:15px;font-weight:800;color:${resteAvant>=0?"#10B981":"#EF4444"}">${fmt(resteAvant)}</div></div>`;
     m.appendChild(infoHaut);
 
-    m.appendChild(el("label",{},"Lieu / description"));
-    const li=el("input",{type:"text",value:label,placeholder:"ex: Leclerc, Lidl…"});li.oninput=e=>{label=e.target.value;};m.appendChild(li);
+    // ── Sélecteur de commerce ──
+    m.appendChild(el("label",{},"Commerce"));
+    const commerceWrap=div("");commerceWrap.style.cssText="display:flex;flex-direction:column;gap:8px;margin-top:4px";
 
-    m.appendChild(el("label",{},"Montant (€)"));
-    const mi=el("input",{type:"number",step:"0.01",value:"",placeholder:"0.00"});
+    // Liste des commerces en boutons
+    const commerceList=div("");commerceList.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
+    function renderCommerces(){
+      commerceList.innerHTML="";
+      getCommerces().forEach(c=>{
+        const btn=div("");
+        btn.style.cssText=`padding:6px 12px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${c===commerce?"#3B82F6":"#334155"};background:${c===commerce?"#1d4ed8":"transparent"};color:${c===commerce?"#fff":"#94a3b8"};transition:all .15s`;
+        btn.textContent=c;
+        btn.onclick=e=>{e.stopPropagation();commerce=c;renderCommerces();};
+        // Bouton supprimer sur les commerces non-base
+        if(!COMMERCES_BASE.includes(c)){
+          const del=el("span",{});del.textContent=" ✕";del.style.cssText="font-size:10px;opacity:.7;cursor:pointer";
+          del.onclick=e=>{
+            e.stopPropagation();
+            delCommerce(c);
+            if(commerce===c)commerce=getCommerces()[0]||"Courses";
+            renderCommerces();
+          };
+          btn.appendChild(del);
+        }
+        commerceList.appendChild(btn);
+      });
+    }
+    renderCommerces();
+    commerceWrap.appendChild(commerceList);
 
-    // Bloc "reste après" mis à jour en direct
+    // Zone ajout nouveau commerce
+    const newCommerceWrap=div("");newCommerceWrap.style.cssText="display:flex;gap:8px;margin-top:4px";
+    const newCommerceInp=el("input",{type:"text",placeholder:"Nouveau commerce…"});
+    newCommerceInp.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px 12px;color:#f1f5f9;font-size:14px";
+    newCommerceInp.onclick=e=>e.stopPropagation();
+    const newCommerceBtn=el("button",{type:"button"});newCommerceBtn.textContent="+ Ajouter";
+    newCommerceBtn.style.cssText="background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:8px 12px;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap";
+    newCommerceBtn.onclick=e=>{
+      e.stopPropagation();
+      const nom=newCommerceInp.value.trim();
+      if(!nom)return;
+      if(addCommerce(nom)){
+        commerce=nom;
+        renderCommerces();
+        newCommerceInp.value="";
+        notify("✓ Commerce ajouté !");
+      } else {
+        notify("Ce commerce existe déjà","err");
+      }
+    };
+    newCommerceWrap.append(newCommerceInp,newCommerceBtn);
+    commerceWrap.appendChild(newCommerceWrap);
+    m.appendChild(commerceWrap);
+
+    // Montant
+    m.appendChild(el("label",{style:"margin-top:12px"},"Montant (€)"));
+    const mi=el("input",{type:"number",step:"0.01",value:"",placeholder:"0.00"});mi.style.marginTop="4px";
+
+    // Reste après
     const resteApresBox=div("");resteApresBox.style.cssText="background:#0f172a;border-radius:8px;padding:12px;margin-top:12px;text-align:center";
     resteApresBox.innerHTML=`<div style="font-size:11px;color:#64748b;margin-bottom:4px">Reste après cette course</div><div style="font-size:22px;font-weight:900;color:#10B981">${fmt(resteAvant)}</div>`;
-
     mi.oninput=e=>{
       montant=e.target.value;
       const apres=resteAvant-(parseFloat(montant)||0);
@@ -631,7 +755,8 @@ function renderModal(modal,data,months,allKeys){
     m.appendChild(resteApresBox);
 
     const btns=div("mbtns");
-    const sv=el("button",{className:"b-save"});sv.textContent="✓ Ajouter";sv.onclick=()=>{if(montant)addCourse(label,montant);};
+    const sv=el("button",{className:"b-save"});sv.textContent="✓ Ajouter";
+    sv.onclick=e=>{e.stopPropagation();if(montant)addCourse(commerce,montant);};
     const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null});
     btns.append(sv,ca);m.appendChild(btns);
   }
@@ -666,45 +791,68 @@ function renderModal(modal,data,months,allKeys){
       m.appendChild(el("label",{},"Catégorie"));
       const catWrap=div("");catWrap.style.cssText="display:flex;flex-direction:column;gap:8px;margin-top:4px";
 
-      // Select existantes + option créer
+      // Select existantes + options créer et gérer
       const catSel=el("select",{});catSel.style.cssText="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:15px";
       const allCats=getCats();
       allCats.forEach(c=>{const o=el("option",{value:c});o.textContent=c;if(c===(item.categorie||"autre"))o.selected=true;catSel.appendChild(o);});
       const oNew=el("option",{value:"__new__"});oNew.textContent="✚ Créer une nouvelle catégorie…";catSel.appendChild(oNew);
+      const oManage=el("option",{value:"__manage__"});oManage.textContent="🗑 Gérer / supprimer des catégories…";catSel.appendChild(oManage);
 
       // Zone création (cachée par défaut)
-      const newCatWrap=div("");newCatWrap.style.cssText="display:none;flex-direction:column;gap:8px";
-      const newCatRow=div("");newCatRow.style.cssText="display:flex;gap:8px";
-      const newCatInp=el("input",{type:"text",placeholder:"Nom de la catégorie…"});
-      newCatInp.style.cssText="flex:1;background:#0f172a;border:1px solid #3B82F6;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:14px";
-      const newCatBtn=el("button",{});newCatBtn.textContent="✓ Créer";
-      newCatBtn.style.cssText="background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;white-space:nowrap";
-      const newCatErr=el("p",{});newCatErr.style.cssText="color:#EF4444;font-size:12px;min-height:16px";
-      newCatRow.append(newCatInp,newCatBtn);newCatWrap.append(newCatRow,newCatErr);
+      const newCatWrap=div("");newCatWrap.style.cssText="display:none;flex-direction:column;gap:10px;background:#0f172a;border-radius:10px;padding:12px;border:1px solid #3B82F6";
+      newCatWrap.onclick=e=>e.stopPropagation();
 
-      // Aussi : liste des catégories perso avec option supprimer
-      const customCats=getCats().filter(c=>!CATEGORIES_BASE.includes(c));
-      if(customCats.length>0){
-        const customList=div("");customList.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px";
-        customCats.forEach(c=>{
-          const tag=div("");tag.style.cssText=`display:flex;align-items:center;gap:4px;background:${getCatColor(c)};color:#fff;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:700`;
-          tag.innerHTML=`<span>${c}</span>`;
-          const d=el("button",{});d.textContent="✕";d.style.cssText="background:transparent;border:none;color:#fff;cursor:pointer;font-size:11px;padding:0 0 0 2px;opacity:.8";
-          d.onclick=e=>{e.stopPropagation();delCustomCat(c);
-            // retirer du select
-            Array.from(catSel.options).forEach(o=>{if(o.value===c)o.remove();});
-            tag.remove();
-            if(item.categorie===c){item.categorie="autre";catSel.value="autre";}
-          };
-          tag.appendChild(d);customList.appendChild(tag);
-        });
-        newCatWrap.appendChild(customList);
-      }
+      // Nom
+      const newCatInp=el("input",{type:"text",placeholder:"Nom de la catégorie…"});
+      newCatInp.style.cssText="width:100%;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:14px;box-sizing:border-box";
+
+      // Sélecteur de couleur
+      const PALETTE=["#3B82F6","#10B981","#8B5CF6","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#f97316","#6366f1","#14b8a6","#d946ef","#0ea5e9","#a855f7","#eab308","#78716c","#e11d48","#0d9488"];
+      let selectedColor=PALETTE[0];
+      const colorLabel=el("p",{style:"color:#94a3b8;font-size:12px;font-weight:700;margin-bottom:4px"});colorLabel.textContent="Couleur";
+      const colorGrid=div("");colorGrid.style.cssText="display:flex;flex-wrap:wrap;gap:8px";
+      PALETTE.forEach(color=>{
+        const swatch=div("");
+        swatch.style.cssText=`width:28px;height:28px;border-radius:50%;background:${color};cursor:pointer;border:3px solid transparent;transition:all .15s;flex-shrink:0`;
+        if(color===selectedColor)swatch.style.border="3px solid #fff";
+        swatch.onclick=e=>{
+          e.stopPropagation();
+          selectedColor=color;
+          colorGrid.querySelectorAll("div").forEach(s=>s.style.border="3px solid transparent");
+          swatch.style.border="3px solid #fff";
+          previewTag.style.background=color;
+        };
+        colorGrid.appendChild(swatch);
+      });
+
+      // Aperçu
+      const previewWrap=div("");previewWrap.style.cssText="display:flex;align-items:center;gap:8px";
+      const previewLbl=el("span",{style:"color:#64748b;font-size:12px"});previewLbl.textContent="Aperçu :";
+      const previewTag=div("");previewTag.style.cssText=`background:${selectedColor};color:#fff;padding:3px 12px;border-radius:12px;font-size:12px;font-weight:700`;
+      previewTag.textContent="nouvelle catégorie";
+      newCatInp.oninput=e=>{previewTag.textContent=e.target.value||"nouvelle catégorie";};
+      previewWrap.append(previewLbl,previewTag);
+
+      // Boutons créer / annuler
+      const newCatBtns=div("");newCatBtns.style.cssText="display:flex;gap:8px";
+      const newCatBtn=el("button",{type:"button"});newCatBtn.textContent="✓ Créer";
+      newCatBtn.style.cssText="flex:1;background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:10px;font-weight:700;font-size:14px;cursor:pointer";
+      const newCatCancel=el("button",{type:"button"});newCatCancel.textContent="Annuler";
+      newCatCancel.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:10px;font-weight:700;font-size:14px;cursor:pointer";
+      newCatCancel.onclick=e=>{e.stopPropagation();newCatWrap.style.display="none";catSel.value=item.categorie||"autre";};
+      newCatBtns.append(newCatBtn,newCatCancel);
+
+      const newCatErr=el("p",{});newCatErr.style.cssText="color:#EF4444;font-size:12px;min-height:16px";
+      newCatWrap.append(newCatInp,colorLabel,colorGrid,previewWrap,newCatBtns,newCatErr);
 
       catSel.onchange=e=>{
         if(e.target.value==="__new__"){
           newCatWrap.style.display="flex";
           newCatInp.focus();
+        } else if(e.target.value==="__manage__"){
+          // Sauvegarder le modal courant et ouvrir le gestionnaire
+          const prevModal=STATE.modal;
+          setState({modal:{type:"manageCats",prevModal}});
         } else {
           item.categorie=e.target.value;
           newCatWrap.style.display="none";
@@ -713,14 +861,15 @@ function renderModal(modal,data,months,allKeys){
       if(item.categorie&&item.categorie!=="autre")catSel.value=item.categorie;
       item.categorie=item.categorie||"autre";
 
-      newCatBtn.onclick=()=>{
+      newCatBtn.onclick=e=>{
+        e.stopPropagation();
         const nom=newCatInp.value.trim().toLowerCase();
         if(!nom){newCatErr.textContent="Entrez un nom de catégorie";return;}
         if(getCats().includes(nom)){newCatErr.textContent="Cette catégorie existe déjà";catSel.value=nom;item.categorie=nom;newCatWrap.style.display="none";return;}
-        addCustomCat(nom);
-        // Ajouter au select avant l'option "créer"
+        addCustomCat(nom,selectedColor);
+        // Ajouter au select avant les 2 dernières options
         const o=el("option",{value:nom});o.textContent=nom;
-        catSel.insertBefore(o,catSel.lastChild);
+        catSel.insertBefore(o,catSel.options[catSel.options.length-2]);
         catSel.value=nom;item.categorie=nom;
         newCatWrap.style.display="none";
         newCatInp.value="";newCatErr.textContent="";
@@ -751,6 +900,110 @@ function renderModal(modal,data,months,allKeys){
     const go=el("button",{className:"b-save"});go.textContent="✓ Créer le mois";go.onclick=()=>createMonth(`${year}-${String(month).padStart(2,"0")}`,copy||null);
     const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>setState({modal:null});
     btns.append(go,ca);m.appendChild(btns);
+  }
+
+  // ── Gérer / supprimer catégories ──
+  else if(modal.type==="manageCats"){
+    m.appendChild(el("h2",{className:"mt"},"🗂 Gérer les catégories"));
+
+    const allCats=getCats();
+    const customCats=allCats.filter(c=>!CATEGORIES_BASE.includes(c));
+
+    // Catégories de base (non supprimables)
+    const baseSection=div("");baseSection.style.cssText="margin-bottom:16px";
+    baseSection.appendChild(el("p",{style:"color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px"},"Catégories de base"));
+    const baseList=div("");baseList.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
+    CATEGORIES_BASE.forEach(c=>{
+      const tag=div("");tag.style.cssText=`background:${getCatColor(c)};color:#fff;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700`;
+      tag.textContent=c;baseList.appendChild(tag);
+    });
+    baseSection.appendChild(baseList);
+    m.appendChild(baseSection);
+
+    // Catégories personnalisées (supprimables)
+    const customSection=div("");
+    customSection.appendChild(el("p",{style:"color:#64748b;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px"},"Catégories personnalisées"));
+
+    const listWrap=div(""); listWrap.id="custom-cat-list";
+    function renderCustomList(){
+      listWrap.innerHTML="";
+      const current=getCats().filter(c=>!CATEGORIES_BASE.includes(c));
+      if(current.length===0){
+        const p=el("p",{style:"color:#475569;font-size:13px;padding:8px 0"});p.textContent="Aucune catégorie personnalisée";listWrap.appendChild(p);return;
+      }
+      current.forEach(c=>{
+        const row=div("");row.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#0f172a;border-radius:8px;margin-bottom:6px";
+        const left=div("");left.style.cssText="display:flex;align-items:center;gap:8px";
+        const dot=div("");dot.style.cssText=`width:10px;height:10px;border-radius:50%;background:${getCatColor(c)};flex-shrink:0`;
+        const lbl=el("span",{style:"color:#cbd5e1;font-size:14px;font-weight:600"});lbl.textContent=c;
+        left.append(dot,lbl);
+
+        // Compter les dépenses concernées
+        let nb=0;
+        Object.values(STATE.months).forEach(mo=>mo.depenses.forEach(d=>{if(d.categorie===c)nb++;}));
+        const count=el("span",{style:"color:#64748b;font-size:11px;margin-left:4px"});
+        count.textContent=nb>0?`(${nb} dépense${nb>1?"s":""})` :"";
+        left.appendChild(count);
+
+        const rowBtns=div("");rowBtns.style.cssText="display:flex;gap:6px";
+
+        // Bouton changer couleur
+        const colorB=el("button",{});colorB.textContent="🎨";
+        colorB.style.cssText="background:#334155;border:none;color:#fff;border-radius:8px;padding:5px 8px;font-size:14px;cursor:pointer";
+        colorB.title="Changer la couleur";
+        colorB.onclick=()=>{
+          // Retirer le panneau si déjà ouvert
+          const existing=row.querySelector(".color-picker-inline");
+          if(existing){existing.remove();return;}
+          const PALETTE=["#3B82F6","#10B981","#8B5CF6","#EF4444","#F59E0B","#06B6D4","#EC4899","#84CC16","#f97316","#6366f1","#14b8a6","#d946ef","#0ea5e9","#a855f7","#eab308","#78716c","#e11d48","#0d9488"];
+          const picker=div("color-picker-inline");picker.style.cssText="display:flex;flex-wrap:wrap;gap:6px;padding:8px;background:#1e293b;border-radius:8px;margin-top:6px";
+          PALETTE.forEach(color=>{
+            const sw=div("");sw.style.cssText=`width:24px;height:24px;border-radius:50%;background:${color};cursor:pointer;border:${getCatColor(c)===color?"2px solid #fff":"2px solid transparent"}`;
+            sw.onclick=()=>{
+              saveCatCustomColor(c,color);
+              dot.style.background=color;
+              picker.remove();
+              notify("✓ Couleur modifiée !");
+              renderCustomList();
+            };
+            picker.appendChild(sw);
+          });
+          row.appendChild(picker);
+        };
+
+        const delB=el("button",{});delB.textContent="🗑";
+        delB.style.cssText="background:#7f1d1d;border:none;color:#fca5a5;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer";
+        rowBtns.append(colorB,delB);
+        delB.onclick=()=>{
+          const confirm=div("");confirm.style.cssText="background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:10px;margin-top:6px";
+          if(nb>0){
+            confirm.innerHTML=`<p style="color:#fca5a5;font-size:13px;margin-bottom:8px">⚠ <strong>${nb} dépense${nb>1?"s":""}</strong> seront réaffectée${nb>1?"s":""} à <strong>"autre"</strong>.</p>`;
+          } else {
+            confirm.innerHTML=`<p style="color:#94a3b8;font-size:13px;margin-bottom:8px">Supprimer la catégorie <strong>"${c}"</strong> ?</p>`;
+          }
+          const confirmBtns=div("");confirmBtns.style.cssText="display:flex;gap:8px";
+          const yes=el("button",{});yes.textContent="✓ Confirmer";yes.style.cssText="flex:1;background:#EF4444;border:none;color:#fff;border-radius:8px;padding:8px;font-weight:700;font-size:13px;cursor:pointer";
+          yes.onclick=()=>{
+            delCatAndReassign(c);
+            renderCustomList();
+          };
+          const no=el("button",{});no.textContent="Annuler";no.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:8px;font-weight:700;font-size:13px;cursor:pointer";
+          no.onclick=()=>confirm.remove();
+          confirmBtns.append(yes,no);confirm.appendChild(confirmBtns);
+          row.appendChild(confirm);
+          // Masquer le bouton supprimer
+          delB.style.display="none";
+        };
+        row.append(left,rowBtns);listWrap.appendChild(row);
+      });
+    }
+    renderCustomList();
+    customSection.appendChild(listWrap);
+    m.appendChild(customSection);
+
+    const ca=el("button",{className:"b-can",style:"margin-top:20px;width:100%"});ca.textContent="← Retour";
+    ca.onclick=()=>setState({modal:modal.prevModal||null});
+    m.appendChild(ca);
   }
 
   ol.appendChild(m);return ol;
