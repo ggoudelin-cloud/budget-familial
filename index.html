@@ -419,57 +419,92 @@ function makeMonth(srcDeps,srcMonth){
 
 // Storage
 let _saveTimer=null;
+let _pendingSave=null; // données en attente d'envoi vers GAS
+
 const DB={
   async load(){
-    // 1) Google Sheets en priorité — JSON brut, toujours lisible même après vidage cache
+    // 1) Google Sheets en priorité — source de vérité partagée
     try{
       const r=await fetch(GAS_URL,{redirect:"follow"});
       const t=await r.text();
       if(t&&t.trim().length>2){
-        // Tenter déchiffrement (ancien format chiffré)
+        // Tenter déchiffrement (ancien format)
         try{
           const dec=await decryptData(t);
           if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
-            return dec.data&&dec.ts?dec.data:dec;
+            const d=dec.data&&dec.ts?dec.data:dec;
+            if(d&&Object.keys(d).length>0){
+              // Mettre en cache local immédiatement
+              try{const enc=await encryptData(d);localStorage.setItem("bf-local",enc);}catch{}
+              return d;
+            }
           }
         }catch{}
-        // JSON brut (nouveau format — résistant au vidage cache)
+        // JSON brut
         try{
           const p=JSON.parse(t);
-          if(p&&typeof p==="object"&&!Array.isArray(p))return p;
+          if(p&&typeof p==="object"&&!Array.isArray(p)&&Object.keys(p).length>0){
+            try{const enc=await encryptData(p);localStorage.setItem("bf-local",enc);}catch{}
+            return p;
+          }
         }catch{}
       }
     }catch{}
-    // 2) Fallback localStorage chiffré
+    // 2) Fallback localStorage
     try{
       const v=localStorage.getItem("bf-local");
       if(v){
         const dec=await decryptData(v);
         if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
-          return dec.data&&dec.ts?dec.data:dec;
+          const d=dec.data&&dec.ts?dec.data:dec;
+          if(d&&Object.keys(d).length>0)return d;
         }
+        // JSON brut fallback
+        try{const p=JSON.parse(v);if(p&&Object.keys(p).length>0)return p;}catch{}
       }
+    }catch{}
+    // 3) Dernier recours : sauvegarde JSON synchrone
+    try{
+      const v=localStorage.getItem("bf-local-json");
+      if(v){const p=JSON.parse(v);if(p&&Object.keys(p).length>0)return p;}
     }catch{}
     return null;
   },
+
   async save(data){
-    // Local : chiffré pour sécurité
+    // 1) Sauvegarde locale IMMÉDIATE et synchrone
+    try{localStorage.setItem("bf-local-json",JSON.stringify(data));}catch{}
+    // 2) Sauvegarde locale chiffrée (async)
     try{
       const enc=await encryptData(data);
       localStorage.setItem("bf-local",enc);
     }catch{
       try{localStorage.setItem("bf-local",JSON.stringify(data));}catch{}
     }
-    clearTimeout(_saveTimer);_saveTimer=setTimeout(()=>DB._send(data),800);
+    // 3) Envoi GAS — immédiat + retry si échec
+    _pendingSave=data;
+    clearTimeout(_saveTimer);
+    _saveTimer=setTimeout(()=>DB._send(data),300); // délai court 300ms
   },
+
   async _send(data){
-    // Google Sheets : JSON brut → lisible sur tout appareil même après vidage cache
     try{
       await fetch(GAS_URL,{
         method:"POST",
         body:JSON.stringify(data),
         headers:{"Content-Type":"text/plain"}
       });
+      _pendingSave=null; // envoi réussi
+    }catch{
+      // Retry dans 5s si échec réseau
+      setTimeout(()=>{if(_pendingSave)DB._send(_pendingSave);},5000);
+    }
+  },
+
+  // Envoi forcé et synchrone (pour beforeunload)
+  sendSync(data){
+    try{
+      navigator.sendBeacon(GAS_URL,JSON.stringify(data));
     }catch{}
   }
 };
@@ -1656,6 +1691,10 @@ function renderModal(modal,data,months,allKeys){
 }
 
 // START
+// Forcer envoi vers GAS si la page est fermée avant le timer
+window.addEventListener("beforeunload",()=>{
+  if(_pendingSave) DB.sendSync(_pendingSave);
+});
 (async()=>{
   // Déchiffrer l'URL Google Apps Script
   GAS_URL = await _getGasUrl();
