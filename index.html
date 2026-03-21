@@ -234,6 +234,15 @@ function persist(months){DB.save(months);setState({months,lastSync:new Date()});
 function updCur(fn){const m=fn(STATE.months[STATE.curKey]);const next={...STATE.months,[STATE.curKey]:m};persist(next);}
 
 async function init(){
+  // Migration : renommer "Bio c' Bon" en "Biocoop" dans les commerces sauvegardés
+  try {
+    const saved = localStorage.getItem("bf-commerces");
+    if(saved){
+      const list = JSON.parse(saved);
+      const idx = list.indexOf("Bio c' Bon");
+      if(idx !== -1){ list[idx]="Biocoop"; localStorage.setItem("bf-commerces",JSON.stringify(list)); }
+    }
+  } catch{}
   setState({loading:true});
   const data=await DB.load();
   if(data&&Object.keys(data).length>0){
@@ -353,9 +362,12 @@ function handlePinDel(){
   updatePinDots();
 }
 function startBlockTimer(){
-  const tick=()=>{
+  // Annuler tout timer précédent
+  if(window._blockTimer)clearInterval(window._blockTimer);
+  window._blockTimer=setInterval(()=>{
     const left=Math.ceil((getBlockUntil()-Date.now())/1000);
     if(left<=0){
+      clearInterval(window._blockTimer);window._blockTimer=null;
       clearBlock();
       STATE.pinBlocked=false;STATE.pinBlockLeft="";STATE.pinError="";
       render();
@@ -363,13 +375,12 @@ function startBlockTimer(){
       const mins=Math.floor(left/60);
       const secs=left%60;
       const display=mins>0?`${mins}m ${String(secs).padStart(2,"0")}s`:`${secs}s`;
-      // Mettre à jour uniquement le texte du compteur sans recréer le DOM
+      STATE.pinBlockLeft=display;
+      // Mettre à jour uniquement le texte si l'élément existe
       const el=document.getElementById("pin-countdown");
       if(el) el.textContent=`🔒 Accès bloqué — réessayez dans ${display}`;
-      else { STATE.pinBlockLeft=display; render(); }
-      setTimeout(tick,1000);
     }
-  };tick();
+  },1000);
 }
 function handleChangePinDigit(d){
   if(STATE.changePinStep===0)return;
@@ -412,7 +423,6 @@ function renderPin(){
   const err=el("p",{className:"pin-error"});err.textContent=STATE.pinError||"";wrap.appendChild(err);
   if(STATE.pinBlocked){
     const bl=el("p",{className:"pin-blocked",id:"pin-countdown"});
-    const mins=Math.floor((STATE.pinBlockLeft||"").toString().includes("m")?0:0);
     bl.textContent=`🔒 Accès bloqué — réessayez dans ${STATE.pinBlockLeft||"..."}`;
     wrap.appendChild(bl);
   }
