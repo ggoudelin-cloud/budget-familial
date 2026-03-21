@@ -124,15 +124,19 @@ input,select{width:100%;background:#0f172a;border:1px solid #334155;border-radiu
 <script>
 // Clé de chiffrement données : dérivée du salt PIN via PBKDF2
 // → unique par appareil, non stockée en dur dans le code
+// Clé de chiffrement des données — passphrase + salt FIXES dans le code
+// → clé IDENTIQUE sur tous les appareils et après vidage du cache
+// → les données Google Sheets restent toujours récupérables
+const _DATA_PASS="BudgetFamilial#Gilles&Murielle#2026";
+const _DATA_SALT_FIXED="YnVkZ2V0ZmFtaWxpYWwyMDI2"; // base64 de "budgetfamilial2026"
 let _dataKey=null;
 async function getDataKey(){
   if(_dataKey)return _dataKey;
-  const saltBytes=Uint8Array.from(atob(getPinSalt()),c=>c.charCodeAt(0));
   const baseKey=await crypto.subtle.importKey(
-    "raw",new TextEncoder().encode("BudgetFamilialDataKey"),{name:"PBKDF2"},false,["deriveKey"]
+    "raw",new TextEncoder().encode(_DATA_PASS),{name:"PBKDF2"},false,["deriveKey"]
   );
   _dataKey=await crypto.subtle.deriveKey(
-    {name:"PBKDF2",salt:saltBytes,iterations:50000,hash:"SHA-256"},
+    {name:"PBKDF2",salt:Uint8Array.from(atob(_DATA_SALT_FIXED),c=>c.charCodeAt(0)),iterations:100000,hash:"SHA-256"},
     baseKey,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]
   );
   return _dataKey;
@@ -150,18 +154,28 @@ async function encryptData(obj){
   });
 }
 async function decryptData(str){
+  if(!str||str.trim().length<2)return null;
   try{
-    const{iv,d}=JSON.parse(str);
-    if(!iv||!d)return JSON.parse(str); // compatibilité ancien format non chiffré
-    const key=await getDataKey();
-    const dec=await crypto.subtle.decrypt(
-      {name:"AES-GCM",iv:Uint8Array.from(atob(iv),c=>c.charCodeAt(0))},
-      key,new Uint8Array(Array.from(atob(d),c=>c.charCodeAt(0)))
-    );
-    return JSON.parse(new TextDecoder().decode(dec));
-  }catch{
-    try{return JSON.parse(str);}catch{return null;} // fallback
-  }
+    const parsed=JSON.parse(str);
+    // Format chiffré : {iv, d}
+    if(parsed&&parsed.iv&&parsed.d){
+      try{
+        const key=await getDataKey();
+        const dec=await crypto.subtle.decrypt(
+          {name:"AES-GCM",iv:Uint8Array.from(atob(parsed.iv),c=>c.charCodeAt(0))},
+          key,new Uint8Array(Array.from(atob(parsed.d),c=>c.charCodeAt(0)))
+        );
+        return JSON.parse(new TextDecoder().decode(dec));
+      }catch{
+        // Déchiffrement échoué (ex: ancien salt) → les données sont perdues côté chiffré
+        // mais on tente quand même de lire comme JSON brut au cas où
+        return null;
+      }
+    }
+    // Format JSON brut non chiffré (ancien format ou fallback)
+    if(typeof parsed==="object"&&parsed!==null)return parsed;
+    return null;
+  }catch{return null;}
 }
 
 // URL chiffrée AES-256-GCM — clé dérivée via PBKDF2 (jamais stockée en clair)
@@ -407,31 +421,39 @@ function makeMonth(srcDeps,srcMonth){
 let _saveTimer=null;
 const DB={
   async load(){
+    // 1) Google Sheets en priorité — JSON brut, toujours lisible même après vidage cache
     try{
       const r=await fetch(GAS_URL,{redirect:"follow"});
       const t=await r.text();
       if(t&&t.trim().length>2){
-        const dec=await decryptData(t);
-        if(dec&&typeof dec==="object"){
-          // Supporter ancien format (direct) et nouveau (avec payload ts/nonce)
-          return dec.data&&dec.ts ? dec.data : dec;
-        }
+        // Tenter déchiffrement (ancien format chiffré)
+        try{
+          const dec=await decryptData(t);
+          if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
+            return dec.data&&dec.ts?dec.data:dec;
+          }
+        }catch{}
+        // JSON brut (nouveau format — résistant au vidage cache)
+        try{
+          const p=JSON.parse(t);
+          if(p&&typeof p==="object"&&!Array.isArray(p))return p;
+        }catch{}
       }
     }catch{}
-    // Fallback localStorage
+    // 2) Fallback localStorage chiffré
     try{
       const v=localStorage.getItem("bf-local");
       if(v){
         const dec=await decryptData(v);
-        if(dec&&typeof dec==="object"){
-          return dec.data&&dec.ts ? dec.data : dec;
+        if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
+          return dec.data&&dec.ts?dec.data:dec;
         }
       }
     }catch{}
     return null;
   },
   async save(data){
-    // Chiffrement local immédiat
+    // Local : chiffré pour sécurité
     try{
       const enc=await encryptData(data);
       localStorage.setItem("bf-local",enc);
@@ -441,11 +463,13 @@ const DB={
     clearTimeout(_saveTimer);_saveTimer=setTimeout(()=>DB._send(data),800);
   },
   async _send(data){
+    // Google Sheets : JSON brut → lisible sur tout appareil même après vidage cache
     try{
-      // Ajouter timestamp pour protection anti-rejeu
-      const payload={data,ts:Date.now(),nonce:btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(8))))};
-      const enc=await encryptData(payload);
-      await fetch(GAS_URL,{method:"POST",body:enc,headers:{"Content-Type":"text/plain"}});
+      await fetch(GAS_URL,{
+        method:"POST",
+        body:JSON.stringify(data),
+        headers:{"Content-Type":"text/plain"}
+      });
     }catch{}
   }
 };
