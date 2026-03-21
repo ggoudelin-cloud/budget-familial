@@ -417,8 +417,24 @@ function makeMonth(srcDeps,srcMonth){
   };
 }
 
-// Storage
-let _saveTimer=null;
+// Extrait les données budget et restaure les méta (commerces/cats) depuis un payload
+function extractAndRestore(payload){
+  if(!payload||typeof payload!=="object")return null;
+  // Restaurer commerces/cats/couleurs si présents dans le payload
+  if(payload._meta){
+    const m=payload._meta;
+    if(Array.isArray(m.commerces)&&m.commerces.length>0)
+      saveCommerces(m.commerces);
+    if(Array.isArray(m.cats)&&m.cats.length>0)
+      saveCats(m.cats);
+    if(m.catColors&&typeof m.catColors==="object")
+      Object.entries(m.catColors).forEach(([k,v])=>saveCatCustomColor(k,v));
+    // Retourner les données sans le _meta
+    const {_meta,...data}=payload;
+    return Object.keys(data).length>0?data:null;
+  }
+  return payload;
+}
 let _pendingSave=null; // données en attente d'envoi vers GAS
 
 const DB={
@@ -432,10 +448,11 @@ const DB={
         try{
           const dec=await decryptData(t);
           if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
-            const d=dec.data&&dec.ts?dec.data:dec;
+            const raw=dec.data&&dec.ts?dec.data:dec;
+            const d=extractAndRestore(raw);
             if(d&&Object.keys(d).length>0){
-              // Mettre en cache local immédiatement
-              try{const enc=await encryptData(d);localStorage.setItem("bf-local",enc);}catch{}
+              try{const enc=await encryptData(raw);localStorage.setItem("bf-local",enc);}catch{}
+              try{localStorage.setItem("bf-local-json",JSON.stringify(raw));}catch{}
               return d;
             }
           }
@@ -444,47 +461,63 @@ const DB={
         try{
           const p=JSON.parse(t);
           if(p&&typeof p==="object"&&!Array.isArray(p)&&Object.keys(p).length>0){
-            try{const enc=await encryptData(p);localStorage.setItem("bf-local",enc);}catch{}
-            return p;
+            const d=extractAndRestore(p);
+            if(d){
+              try{const enc=await encryptData(p);localStorage.setItem("bf-local",enc);}catch{}
+              try{localStorage.setItem("bf-local-json",JSON.stringify(p));}catch{}
+              return d;
+            }
           }
         }catch{}
       }
     }catch{}
-    // 2) Fallback localStorage
+    // 2) Fallback localStorage chiffré
     try{
       const v=localStorage.getItem("bf-local");
       if(v){
-        const dec=await decryptData(v);
-        if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
-          const d=dec.data&&dec.ts?dec.data:dec;
-          if(d&&Object.keys(d).length>0)return d;
-        }
-        // JSON brut fallback
-        try{const p=JSON.parse(v);if(p&&Object.keys(p).length>0)return p;}catch{}
+        try{
+          const dec=await decryptData(v);
+          if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
+            const raw=dec.data&&dec.ts?dec.data:dec;
+            const d=extractAndRestore(raw);
+            if(d&&Object.keys(d).length>0)return d;
+          }
+        }catch{}
+        try{const p=JSON.parse(v);const d=extractAndRestore(p);if(d&&Object.keys(d).length>0)return d;}catch{}
       }
     }catch{}
-    // 3) Dernier recours : sauvegarde JSON synchrone
+    // 3) Dernier recours : JSON synchrone
     try{
       const v=localStorage.getItem("bf-local-json");
-      if(v){const p=JSON.parse(v);if(p&&Object.keys(p).length>0)return p;}
+      if(v){const p=JSON.parse(v);const d=extractAndRestore(p);if(d&&Object.keys(d).length>0)return d;}
     }catch{}
     return null;
   },
 
   async save(data){
-    // 1) Sauvegarde locale IMMÉDIATE et synchrone
-    try{localStorage.setItem("bf-local-json",JSON.stringify(data));}catch{}
-    // 2) Sauvegarde locale chiffrée (async)
+    // Enrichir les données avec commerces et catégories personnalisées
+    // pour les sauvegarder dans GAS et les retrouver après vidage cache
+    const payload={
+      ...data,
+      _meta:{
+        commerces: getCommerces(),
+        cats: getCats(),
+        catColors: getCatCustomColors(),
+        savedAt: Date.now()
+      }
+    };
+    // 1) Sauvegarde locale synchrone IMMÉDIATE
+    try{localStorage.setItem("bf-local-json",JSON.stringify(payload));}catch{}
+    // 2) Sauvegarde locale chiffrée
     try{
-      const enc=await encryptData(data);
+      const enc=await encryptData(payload);
       localStorage.setItem("bf-local",enc);
     }catch{
-      try{localStorage.setItem("bf-local",JSON.stringify(data));}catch{}
+      try{localStorage.setItem("bf-local",JSON.stringify(payload));}catch{}
     }
-    // 3) Envoi GAS — immédiat + retry si échec
-    _pendingSave=data;
-    clearTimeout(_saveTimer);
-    _saveTimer=setTimeout(()=>DB._send(data),300); // délai court 300ms
+    // 3) Envoi GAS IMMÉDIAT
+    _pendingSave=payload;
+    await DB._send(payload);
   },
 
   async _send(data){
@@ -547,12 +580,13 @@ function notify(msg,err=false){
     render();
   }
 }
-function persist(months){
-  DB.save(months);
+async function persist(months){
+  // Mettre à jour STATE d'abord pour réactivité immédiate
   STATE.months=months;STATE.lastSync=new Date();
-  notify("✓ Synchronisé");
-  // Ne re-render que si aucun modal ouvert (sinon notify gère le toast seul)
   if(!STATE.modal&&!STATE.openCourseId) render();
+  // Sauvegarder (await = on attend la fin)
+  await DB.save(months);
+  notify("✓ Synchronisé");
 }
 function updCur(fn){const m=fn(STATE.months[STATE.curKey]);const next={...STATE.months,[STATE.curKey]:m};persist(next);}
 
@@ -637,13 +671,13 @@ function updateCourse(id,patch){
   });
 }
 // Mise à jour immédiate + sync
-function setMonthsAndRender(fn){
+async function setMonthsAndRender(fn){
   const newMonth=fn(STATE.months[STATE.curKey]);
   const next={...STATE.months,[STATE.curKey]:newMonth};
-  DB.save(next);
   STATE.months=next;STATE.lastSync=new Date();
-  notify("✓ Synchronisé");
   if(!STATE.modal&&!STATE.openCourseId) render();
+  await DB.save(next);
+  notify("✓ Synchronisé");
 }
 
 async function createMonth(key,copyKey){
@@ -653,13 +687,13 @@ async function createMonth(key,copyKey){
   const src=copyKey&&STATE.months[copyKey]?STATE.months[copyKey]:null;
   const nm=makeMonth(src?.depenses,src);
   const next={...STATE.months,[key]:nm};
-  DB.save(next);
   STATE.months=next;STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;
   STATE.lastSync=new Date();
   STATE.toast={msg:"✓ Mois créé !",err:false};
   clearTimeout(STATE.toastTimer);
   STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
   render();
+  await DB.save(next); // Envoi GAS attendu
 }
 
 // PIN logic
