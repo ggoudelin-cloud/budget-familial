@@ -2,8 +2,6 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https://script.google.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src https://script.google.com; img-src 'self' data:; font-src 'self';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -58,7 +56,7 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.5px}
 main{padding:12px 12px 90px}
 .col{display:flex;flex-direction:column;gap:12px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.card{background:#1e293b;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.3);animation:fadeIn .3s}
+.card{background:#1e293b;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .ct{margin:0 0 12px;font-size:13px;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:1px}
 .li{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #1a2744}
 .li:last-child{border-bottom:none}
@@ -441,8 +439,23 @@ let STATE={
   openCourseId:null, // id de la course dont le panneau d'édition est ouvert
 };
 function setState(p){Object.assign(STATE,p);render();}
-function notify(msg,err=false){clearTimeout(STATE.toastTimer);const t=setTimeout(()=>setState({toast:null}),2800);setState({toast:{msg,err},toastTimer:t});}
-function persist(months){DB.save(months);setState({months,lastSync:new Date()});notify("✓ Synchronisé");}
+// setSilent met à jour STATE sans render (pour la synchro auto)
+function setSilent(p){Object.assign(STATE,p);}
+function notify(msg,err=false){
+  clearTimeout(STATE.toastTimer);
+  const t=setTimeout(()=>{STATE.toast=null;render();},2800);
+  // Ne pas appeler setState pour le toast — juste màj STATE + render une seule fois
+  STATE.toast={msg,err};STATE.toastTimer=t;
+}
+function persist(months){
+  DB.save(months);
+  // Une seule mise à jour STATE + un seul render
+  STATE.months=months;STATE.lastSync=new Date();
+  STATE.toast={msg:"✓ Synchronisé",err:false};
+  clearTimeout(STATE.toastTimer);
+  STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
+  render();
+}
 function updCur(fn){const m=fn(STATE.months[STATE.curKey]);const next={...STATE.months,[STATE.curKey]:m};persist(next);}
 
 async function init(){
@@ -530,18 +543,28 @@ function setMonthsAndRender(fn){
   const newMonth=fn(STATE.months[STATE.curKey]);
   const next={...STATE.months,[STATE.curKey]:newMonth};
   DB.save(next);
-  STATE.months=next;
-  STATE.lastSync=new Date();
+  // Un seul render avec toast inclus
+  STATE.months=next;STATE.lastSync=new Date();
+  STATE.toast={msg:"✓ Synchronisé",err:false};
+  clearTimeout(STATE.toastTimer);
+  STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
   render();
-  notify("✓ Synchronisé");
 }
 
 async function createMonth(key,copyKey){
-  if(STATE.months[key]){setState({curKey:key,modal:null,monthPick:false});return;}
+  if(STATE.months[key]){
+    STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;render();return;
+  }
   const src=copyKey&&STATE.months[copyKey]?STATE.months[copyKey]:null;
   const nm=makeMonth(src?.depenses,src);
-  const next={...STATE.months,[key]:nm};persist(next);
-  setState({curKey:key,modal:null,monthPick:false});notify("✓ Mois créé !");
+  const next={...STATE.months,[key]:nm};
+  DB.save(next);
+  STATE.months=next;STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;
+  STATE.lastSync=new Date();
+  STATE.toast={msg:"✓ Mois créé !",err:false};
+  clearTimeout(STATE.toastTimer);
+  STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
+  render();
 }
 
 // PIN logic
@@ -802,7 +825,18 @@ function renderApp(){
   const hbtns=div("hbtns");
   const lockB=el("button",{className:"icon-btn",title:"Verrouiller"});lockB.textContent="🔒";lockB.onclick=()=>{localStorage.removeItem(PIN_AUTH_KEY);setState({screen:"pin",pinInput:"",pinError:""});};
   const pinB=el("button",{className:"icon-btn",title:"Changer PIN"});pinB.textContent="🔑";pinB.onclick=()=>setState({modal:{type:"changePin"},changePinStep:1,changePinInput:"",changePinError:""});
-  const refB=el("button",{className:"icon-btn",title:"Actualiser"});refB.textContent="⟳";refB.onclick=async()=>{const d=await DB.load();if(d&&Object.keys(d).length>0){Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});setState({months:d,lastSync:new Date()});notify("✓ Actualisé");}};
+  const refB=el("button",{className:"icon-btn",title:"Actualiser"});refB.textContent="⟳";
+  refB.onclick=async()=>{
+    const d=await DB.load();
+    if(d&&Object.keys(d).length>0){
+      Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});
+      STATE.months=d;STATE.lastSync=new Date();
+      STATE.toast={msg:"✓ Actualisé",err:false};
+      clearTimeout(STATE.toastTimer);
+      STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
+      render();
+    }
+  };
   hbtns.append(lockB,pinB,refB);hrow.append(tWrap,hbtns);
   const mbar=div("mbar");
   const mselB=el("button",{className:"msel"});mselB.textContent=`📅 ${keyLabel(curKey)} ▾`;mselB.onclick=()=>setState({monthPick:!STATE.monthPick});
@@ -1321,7 +1355,7 @@ function renderModal(modal,data,months,allKeys){
     montantInp.oninput=e=>{item.montant=e.target.value;};
     m.appendChild(montantInp);
     if(itemType==="depense"){
-      m.appendChild(el("label",{},"Catégorie"));
+      m.appendChild(el("label",{},"Catégories"));
       const catWrap=div("");catWrap.style.cssText="display:flex;flex-direction:column;gap:8px;margin-top:4px";
       catWrap.onclick=e=>e.stopPropagation();
 
