@@ -313,29 +313,60 @@ async function createMonth(key,copyKey){
 }
 
 // PIN logic
+function updatePinDots(error=false){
+  const dots=document.querySelectorAll(".pin-dot");
+  if(!dots.length){render();return;}
+  dots.forEach((dot,i)=>{
+    dot.className="pin-dot";
+    if(STATE.pinInput.length>i)dot.classList.add(error?"error":"filled");
+  });
+  const errEl=document.querySelector(".pin-error");
+  if(errEl)errEl.textContent=STATE.pinError||"";
+}
 function handlePinDigit(d){
   if(STATE.pinBlocked)return;
-  const val=STATE.pinInput+d;setState({pinInput:val,pinError:""});
+  const val=STATE.pinInput+d;
+  STATE.pinInput=val;STATE.pinError="";
+  updatePinDots();
   if(val.length===4){
-    if(Date.now()<getBlockUntil()){setState({pinBlocked:true,pinInput:""});startBlockTimer();return;}
-    if(val===getPin()){clearBlock();setAuthed();setState({screen:"app",pinInput:"",pinError:""});init();}
-    else{
+    if(Date.now()<getBlockUntil()){STATE.pinBlocked=true;STATE.pinInput="";render();startBlockTimer();return;}
+    if(val===getPin()){
+      clearBlock();setAuthed();STATE.pinInput="";STATE.pinError="";
+      setState({screen:"app"});init();
+    } else {
       const tries=getTries()+1;setTries(tries);const left=MAX_TRIES-tries;
-      if(tries>=MAX_TRIES){setBlock();setState({pinInput:"",pinError:"",pinShake:true,pinBlocked:true});startBlockTimer();setTimeout(()=>setState({pinShake:false}),500);}
-      else{setState({pinInput:"",pinError:`Code incorrect — ${left} essai${left>1?"s":""} restant${left>1?"s":""}`,pinShake:true});setTimeout(()=>setState({pinShake:false}),500);}
+      if(tries>=MAX_TRIES){
+        setBlock();STATE.pinInput="";STATE.pinError="";STATE.pinBlocked=true;
+        render();startBlockTimer();
+      } else {
+        STATE.pinInput="";
+        STATE.pinError=`Code incorrect — ${left} essai${left>1?"s":""} restant${left>1?"s":""}`;
+        updatePinDots(true);
+        setTimeout(()=>{STATE.pinError="";updatePinDots();},800);
+      }
     }
   }
 }
-function handlePinDel(){setState({pinInput:STATE.pinInput.slice(0,-1),pinError:""});}
+function handlePinDel(){
+  STATE.pinInput=STATE.pinInput.slice(0,-1);
+  STATE.pinError="";
+  updatePinDots();
+}
 function startBlockTimer(){
   const tick=()=>{
     const left=Math.ceil((getBlockUntil()-Date.now())/1000);
-    if(left<=0){clearBlock();setState({pinBlocked:false,pinBlockLeft:0,pinError:""});}
-    else{
+    if(left<=0){
+      clearBlock();
+      STATE.pinBlocked=false;STATE.pinBlockLeft="";STATE.pinError="";
+      render();
+    } else {
       const mins=Math.floor(left/60);
       const secs=left%60;
       const display=mins>0?`${mins}m ${String(secs).padStart(2,"0")}s`:`${secs}s`;
-      setState({pinBlockLeft:display});
+      // Mettre à jour uniquement le texte du compteur sans recréer le DOM
+      const el=document.getElementById("pin-countdown");
+      if(el) el.textContent=`🔒 Accès bloqué — réessayez dans ${display}`;
+      else { STATE.pinBlockLeft=display; render(); }
       setTimeout(tick,1000);
     }
   };tick();
@@ -373,12 +404,18 @@ function render(){
 function renderPin(){
   const wrap=div("pin-screen");
   if(STATE.pinShake)wrap.style.animation="shake .4s";
+  else if(STATE.pinBlocked)wrap.style.animation="none"; // pas d'animation pendant le blocage
   wrap.append(el("div",{className:"pin-logo"},"💶"),el("h2",{className:"pin-title"},"Budget Familial"),el("p",{className:"pin-sub"},"Entrez votre code PIN"));
   const dots=div("pin-dots");
   for(let i=0;i<4;i++){const d=div("pin-dot");if(STATE.pinInput.length>i)d.classList.add(STATE.pinError?"error":"filled");dots.appendChild(d);}
   wrap.appendChild(dots);
   const err=el("p",{className:"pin-error"});err.textContent=STATE.pinError||"";wrap.appendChild(err);
-  if(STATE.pinBlocked){const bl=el("p",{className:"pin-blocked"});bl.textContent=`🔒 Accès bloqué — réessayez dans ${STATE.pinBlockLeft}`;wrap.appendChild(bl);}
+  if(STATE.pinBlocked){
+    const bl=el("p",{className:"pin-blocked",id:"pin-countdown"});
+    const mins=Math.floor((STATE.pinBlockLeft||"").toString().includes("m")?0:0);
+    bl.textContent=`🔒 Accès bloqué — réessayez dans ${STATE.pinBlockLeft||"..."}`;
+    wrap.appendChild(bl);
+  }
   else{
     const grid=div("pin-grid");
     ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
