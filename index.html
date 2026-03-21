@@ -114,7 +114,7 @@ input,select{width:100%;background:#0f172a;border:1px solid #334155;border-radiu
 <script>
 const GAS_URL="https://script.google.com/macros/s/AKfycby0_v0SAuFnxUGBLPo4XzTYDy5Z0Hsnltao6pcZgTFS06X06KhFzy-jndgvHTEQpduH/exec";
 const PIN_KEY="bf-pin",PIN_AUTH_KEY="bf-pin-auth",PIN_TRIES_KEY="bf-pin-tries",PIN_BLOCK_KEY="bf-pin-block";
-const DEFAULT_PIN="7369",AUTH_DURATION=30*60*1000,MAX_TRIES=3,BLOCK_DURATION=30*1000;
+const DEFAULT_PIN="7369",AUTH_DURATION=30*60*1000,MAX_TRIES=3,BLOCK_DURATION=3*60*1000;
 const CATEGORIES_BASE=["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
 const CAT_COLORS_EXTRA=["#6366f1","#0ea5e9","#d946ef","#f97316","#14b8a6","#a855f7","#eab308","#78716c"];
 function getCats(){try{const v=localStorage.getItem("bf-cats");if(v)return JSON.parse(v);}catch{}return[...CATEGORIES_BASE];}
@@ -157,7 +157,7 @@ function delCatAndReassign(nom){
     notify("✓ Catégorie supprimée");
   }
 }
-const COMMERCES_BASE=["Leclerc","Lidl","Aldi","Carrefour","Intermarché","Super U","Casino","Monoprix","Franprix","Picard","Bio c' Bon","Grand Frais"];
+const COMMERCES_BASE=["Leclerc","Lidl","Aldi","Carrefour","Intermarché","Super U","Casino","Monoprix","Franprix","Picard","Biocoop","Grand Frais"];
 function getCommerces(){try{const v=localStorage.getItem("bf-commerces");if(v)return JSON.parse(v);}catch{}return[...COMMERCES_BASE];}
 function saveCommerces(list){localStorage.setItem("bf-commerces",JSON.stringify(list));}
 function addCommerce(nom){const n=nom.trim();if(!n)return false;const list=getCommerces();if(list.map(x=>x.toLowerCase()).includes(n.toLowerCase()))return false;list.push(n);saveCommerces(list);return true;}
@@ -321,14 +321,24 @@ function handlePinDigit(d){
     if(val===getPin()){clearBlock();setAuthed();setState({screen:"app",pinInput:"",pinError:""});init();}
     else{
       const tries=getTries()+1;setTries(tries);const left=MAX_TRIES-tries;
-      if(tries>=MAX_TRIES){setBlock();clearBlock();setState({pinInput:"",pinError:"",pinShake:true,pinBlocked:true});startBlockTimer();setTimeout(()=>setState({pinShake:false}),500);}
+      if(tries>=MAX_TRIES){setBlock();setState({pinInput:"",pinError:"",pinShake:true,pinBlocked:true});startBlockTimer();setTimeout(()=>setState({pinShake:false}),500);}
       else{setState({pinInput:"",pinError:`Code incorrect — ${left} essai${left>1?"s":""} restant${left>1?"s":""}`,pinShake:true});setTimeout(()=>setState({pinShake:false}),500);}
     }
   }
 }
 function handlePinDel(){setState({pinInput:STATE.pinInput.slice(0,-1),pinError:""});}
 function startBlockTimer(){
-  const tick=()=>{const left=Math.ceil((getBlockUntil()-Date.now())/1000);if(left<=0){clearBlock();setState({pinBlocked:false,pinBlockLeft:0,pinError:""});}else{setState({pinBlockLeft:left});setTimeout(tick,1000);}};tick();
+  const tick=()=>{
+    const left=Math.ceil((getBlockUntil()-Date.now())/1000);
+    if(left<=0){clearBlock();setState({pinBlocked:false,pinBlockLeft:0,pinError:""});}
+    else{
+      const mins=Math.floor(left/60);
+      const secs=left%60;
+      const display=mins>0?`${mins}m ${String(secs).padStart(2,"0")}s`:`${secs}s`;
+      setState({pinBlockLeft:display});
+      setTimeout(tick,1000);
+    }
+  };tick();
 }
 function handleChangePinDigit(d){
   if(STATE.changePinStep===0)return;
@@ -368,7 +378,7 @@ function renderPin(){
   for(let i=0;i<4;i++){const d=div("pin-dot");if(STATE.pinInput.length>i)d.classList.add(STATE.pinError?"error":"filled");dots.appendChild(d);}
   wrap.appendChild(dots);
   const err=el("p",{className:"pin-error"});err.textContent=STATE.pinError||"";wrap.appendChild(err);
-  if(STATE.pinBlocked){const bl=el("p",{className:"pin-blocked"});bl.textContent=`🔒 Bloqué — réessayez dans ${STATE.pinBlockLeft}s`;wrap.appendChild(bl);}
+  if(STATE.pinBlocked){const bl=el("p",{className:"pin-blocked"});bl.textContent=`🔒 Accès bloqué — réessayez dans ${STATE.pinBlockLeft}`;wrap.appendChild(bl);}
   else{
     const grid=div("pin-grid");
     ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
