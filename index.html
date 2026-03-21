@@ -586,7 +586,7 @@ function renderDashboard(data,totSal,totDep,totEco,paye,solde){
 
   // Répartition
   const rc=div("card");rc.appendChild(el("h3",{className:"ct"},"Répartition"));
-  Object.entries(byCat).sort((a,b)=>b[1]-a[1]).forEach(([cat,mnt])=>{
+  Object.entries(byCat).sort((a,b)=>a[0].localeCompare(b[0],"fr")).forEach(([cat,mnt])=>{
     const r=div("crow");const dot=div("cdot");dot.style.background=getCatColor(cat);
     const lbl=el("span",{className:"clbl"});lbl.textContent=cat;
     const bar=div("cbar");const fill=div("cfill");fill.style.cssText=`width:${Math.round((mnt/totDep)*100)}%;background:${getCatColor(cat)}`;
@@ -793,7 +793,7 @@ function iedit(val,color,onClick){
 
 // DEPENSES
 function renderDepenses(data){
-  const filtre=STATE.filtre;const cats=["toutes",...getCats()];
+  const filtre=STATE.filtre;const cats=["toutes",...getCats().slice().sort((a,b)=>a.localeCompare(b,"fr"))];
   const list=(filtre==="toutes"?data.depenses:data.depenses.filter(d=>d.categorie===filtre))
     .slice().sort((a,b)=>{
       const catCmp=a.categorie.localeCompare(b.categorie,"fr");
@@ -1055,7 +1055,7 @@ function renderModal(modal,data,months,allKeys){
       const catGrid=div("");catGrid.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
       function renderCatButtons(){
         catGrid.innerHTML="";
-        getCats().forEach(c=>{
+        getCats().slice().sort((a,b)=>a.localeCompare(b,"fr")).forEach(c=>{
           const btn=div("");
           const selected=c===(item.categorie||"autre");
           btn.style.cssText=`padding:6px 12px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${selected?"#3B82F6":"#334155"};background:${selected?"#1d4ed8":"transparent"};color:${selected?"#fff":"#94a3b8"};display:flex;align-items:center;gap:4px;transition:all .15s`;
@@ -1161,7 +1161,7 @@ function renderModal(modal,data,months,allKeys){
 
     function renderAllCats(){
       listWrap.innerHTML="";
-      const allCats=getCats(); // toutes : natives + perso
+      const allCats=getCats().slice().sort((a,b)=>a.localeCompare(b,"fr"));
       allCats.forEach(c=>{
         const isNative=CATEGORIES_BASE.includes(c);
         const row=div("");row.style.cssText="background:#0f172a;border-radius:8px;margin-bottom:8px;overflow:hidden";
