@@ -887,6 +887,12 @@ function inp(type,val,onChange,ph=""){const i=el("input",{type,value:val||"",pla
 function sel(val,opts,onChange){const s=el("select",{});s.onchange=e=>onChange(e.target.value);opts.forEach(o=>{const op=el("option",{value:o});op.textContent=o;if(o===val)op.selected=true;s.appendChild(op);});return s;}
 
 function render(){
+  // Bloquer le re-render si un champ est en cours de saisie dans un modal
+  if(STATE.modal||STATE.openCourseId){
+    const activeTag=document.activeElement&&document.activeElement.tagName;
+    const isTyping=activeTag==="INPUT"||activeTag==="TEXTAREA"||activeTag==="SELECT";
+    if(isTyping) return; // ne pas écraser la saisie en cours
+  }
   const root=document.getElementById("root");root.innerHTML="";
   if(STATE.screen==="setup"){root.appendChild(renderSetup());return;}
   if(STATE.screen==="pin"){root.appendChild(renderPin());return;}
@@ -2068,10 +2074,15 @@ function renderModal(modal,data,months,allKeys){
 
   // ── Edit / Add ──
   else if(modal.type==="edit"||modal.type==="add"){
-    // On stocke l'item dans STATE.modalItem pour survivre aux re-renders (sync 15s)
+    // Conserver STATE.modalItem si même modal déjà ouvert — évite la perte de saisie
     if(!STATE.modalItem||STATE.modalItem._modalId!==modal._modalId){
       STATE.modalItem={...modal.item, _modalId:modal._modalId||uid()};
       modal._modalId=STATE.modalItem._modalId;
+    } else {
+      // Synchroniser uniquement les champs non saisis (id, prenom...) mais garder les valeurs saisies
+      if(STATE.modalItem.id===modal.item.id){
+        modal._modalId=STATE.modalItem._modalId;
+      }
     }
     const item=STATE.modalItem;
     const isEdit=modal.type==="edit";
