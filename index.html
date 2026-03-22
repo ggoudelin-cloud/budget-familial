@@ -1116,7 +1116,18 @@ function renderApp(){
               yes.style.cssText="flex:1;background:#EF4444;border:none;color:#fff;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
               yes.onclick=e=>{
                 e.stopPropagation();
-                const next={...STATE.months};delete next[key];
+                const next={...STATE.months};
+                // Préserver les transactions Livret A — les transférer au mois le plus proche
+                const txASupprimer=(STATE.months[key].livretA||[]);
+                if(txASupprimer.length>0){
+                  const autresKeys=Object.keys(next).filter(k=>k!==key).sort();
+                  // Mois suivant en priorité, sinon précédent
+                  const cible=autresKeys.find(k=>k>key)||autresKeys[autresKeys.length-1];
+                  if(cible){
+                    next[cible]={...next[cible],livretA:[...(next[cible].livretA||[]),...txASupprimer]};
+                  }
+                }
+                delete next[key];
                 const newKeys=Object.keys(next).sort().reverse();
                 const newCurKey=key===curKey?(newKeys[0]||nowKey()):curKey;
                 STATE.months=next;STATE.curKey=newCurKey;STATE.monthPick=false;
