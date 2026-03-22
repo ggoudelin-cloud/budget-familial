@@ -1041,6 +1041,19 @@ function renderApp(){
   const mselB=el("button",{className:"msel"});mselB.textContent=`📅 ${keyLabel(curKey)} ▾`;mselB.onclick=()=>setState({monthPick:!STATE.monthPick});
   const mnewB=el("button",{className:"mnew"});mnewB.textContent="+ Mois";mnewB.onclick=()=>setState({modal:{type:"newMonth"}});
   mbar.append(mselB,mnewB);
+  // Alerte si le mois calendaire actuel existe mais n'a pas de salaires saisis
+  const todayKey=nowKey();
+  if(months[todayKey]){
+    const salMoisActuel=months[todayKey].salaires.reduce((a,x)=>a+(+x.montant||0),0);
+    if(salMoisActuel===0){
+      const alert=div("");
+      alert.style.cssText="background:#7f1d1d;border:1px solid #EF4444;border-radius:8px;padding:8px 12px;margin-top:4px;display:flex;align-items:center;gap:8px;cursor:pointer";
+      alert.innerHTML=`<span style="font-size:14px">⚠️</span><span style="color:#fca5a5;font-size:12px;font-weight:700;flex:1">Salaires non saisis pour ${keyLabel(todayKey)}</span><span style="color:#fca5a5;font-size:11px">→</span>`;
+      alert.onclick=()=>setState({curKey:todayKey,tab:"dashboard"});
+      mbar.after(alert);
+    }
+  }mnewB.onclick=()=>setState({modal:{type:"newMonth"}});
+  mbar.append(mselB,mnewB);
   const tabs=div("tabs");
   [["dashboard","📊 Résumé"],["depenses","💸 Dépenses"],["historique","📈 Historique"],["stats","📉 Stats"]].forEach(([id,l])=>{
     const t=el("button",{className:"tab"+(tab===id?" on":"")});t.textContent=l;t.onclick=()=>setState({tab:id});tabs.appendChild(t);
