@@ -241,9 +241,9 @@ function getCats(){
   }catch{}
   return[...CATEGORIES_BASE];
 }
-function saveCats(cats){
+function saveCats(cats,silent=false){
   try{localStorage.setItem(CATS_KEY,JSON.stringify(cats));}catch{}
-  localStorage.setItem("bf-meta-modAt",String(Date.now()));
+  if(!silent)localStorage.setItem("bf-meta-modAt",String(Date.now()));
 }
 const CAT_COLORS={logement:"#3B82F6",assurances:"#10B981",abonnements:"#8B5CF6","crédits":"#EF4444","vie courante":"#F59E0B",transport:"#06B6D4",enfants:"#EC4899",animaux:"#84CC16",autre:"#9CA3AF"};
 const CAT_COLORS_KEY="bf-cat-colors-v2";
@@ -322,9 +322,9 @@ function getCommerces(){
   return[...COMMERCES_BASE];
 }
 
-function saveCommerces(list){
+function saveCommerces(list,silent=false){
   try{localStorage.setItem(COMMERCES_KEY,JSON.stringify(list));}catch{}
-  localStorage.setItem("bf-meta-modAt",String(Date.now()));
+  if(!silent)localStorage.setItem("bf-meta-modAt",String(Date.now()));
 }
 
 function addCommerce(nom){
@@ -431,9 +431,9 @@ function extractAndRestore(payload){
     // Si local est plus récent → on a modifié ici → on garde le local
     if(gasSavedAt>localModAt){
       if(Array.isArray(m.commerces)&&m.commerces.length>0)
-        saveCommerces(m.commerces);
+        saveCommerces(m.commerces,true); // silent=true : pas de màj timestamp
       if(Array.isArray(m.cats)&&m.cats.length>0)
-        saveCats(m.cats);
+        saveCats(m.cats,true); // silent=true
       if(m.catColors&&typeof m.catColors==="object")
         Object.entries(m.catColors).forEach(([k,v])=>saveCatCustomColor(k,v));
       // Mettre à jour le timestamp local pour correspondre à GAS
