@@ -420,14 +420,21 @@ const BASE=[
   {type:"Ikéa",montant:74.58,categorie:"logement"},
 ];
 
-function makeMonth(srcDeps,srcMonth){
+function makeMonth(srcDeps,srcMonth,targetKey){
+  // Si on copie depuis un mois source, exclure les dépenses dont la date de fin est dépassée
+  const depsSrc=srcDeps||(srcMonth?srcMonth.depenses:null)||BASE;
+  const depsFiltered=targetKey?depsSrc.filter(d=>{
+    if(!d.dateFin)return true; // pas de date de fin → toujours inclus
+    // dateFin format "YYYY-MM" — exclure si < mois cible
+    return d.dateFin>=targetKey;
+  }):depsSrc;
   return {
     salaires:srcMonth?JSON.parse(JSON.stringify(srcMonth.salaires)):[{id:uid(),prenom:"Murielle",montant:1654.82},{id:uid(),prenom:"Gilles",montant:3048.64}],
-    depenses:(srcDeps||BASE).map(d=>({...d,id:uid(),paye:false})),
+    depenses:depsFiltered.map(d=>({...d,id:uid(),paye:false})),
     economies:srcMonth?JSON.parse(JSON.stringify(srcMonth.economies)).map(e=>({...e,id:uid()})):[{id:uid(),type:"Vacances / Mariage / Voiture",montant:250}],
     argentPoche:srcMonth?JSON.parse(JSON.stringify(srcMonth.argentPoche)):[{id:uid(),prenom:"Murielle",montant:392.24},{id:uid(),prenom:"Gilles",montant:392.24}],
-    courses:[], // [{id, date, label, montant}]
-    livretA:[], // [{id, date, type, cat, montant}] — transactions du mois
+    courses:[],
+    livretA:[],
   };
 }
 
@@ -727,7 +734,7 @@ async function createMonth(key,copyKey){
     STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;render();return;
   }
   const src=copyKey&&STATE.months[copyKey]?STATE.months[copyKey]:null;
-  const nm=makeMonth(src?.depenses,src);
+  const nm=makeMonth(src?.depenses,src,key); // key = mois cible pour filtrer dateFin
   const next={...STATE.months,[key]:nm};
   STATE.months=next;STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;
   STATE.lastSync=new Date();
@@ -1367,6 +1374,15 @@ function renderDepenses(data){
     name.textContent=d.type;
     const pill=el("span",{className:"pill",style:`background:${getCatColor(d.categorie)}`});pill.textContent=d.categorie;
     info.append(name,pill);
+    // Badge date de fin si présente
+    if(d.dateFin){
+      const MOIS_COURT=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+      const[fy,fm]=d.dateFin.split("-");
+      const isLast=d.dateFin===STATE.curKey; // dernier mois de paiement
+      const badge=el("span",{className:"pill",style:`background:${isLast?"#7f1d1d":"#1e3a5f"};color:${isLast?"#fca5a5":"#93c5fd"};margin-left:4px`});
+      badge.textContent=`⏱ fin ${MOIS_COURT[+fm-1]} ${fy}`;
+      info.appendChild(badge);
+    }
     const mnt=el("span",{style:`color:${d.paye?"#64748b":"#f1f5f9"};font-weight:700;font-size:14px;margin-right:8px`});mnt.textContent=fmt(d.montant);
     const eb=el("button",{className:"eBtn"});eb.textContent="✏️";eb.onclick=()=>setState({modal:{type:"edit",itemType:"depense",item:{...d}}});
     row.append(chk,info,mnt,eb);col.appendChild(row);
@@ -1863,6 +1879,70 @@ function renderModal(modal,data,months,allKeys){
       };
       catWrap.appendChild(manageBtn);
       m.appendChild(catWrap);
+
+      // ── Date de fin (optionnelle — paiements échelonnés) ──
+      const dateFinWrap=div("");dateFinWrap.style.cssText="margin-top:12px";
+      dateFinWrap.onclick=e=>e.stopPropagation();
+      const dateFinLabel=el("label",{style:"color:#94a3b8;font-size:12px;font-weight:700;margin-bottom:4px;display:block"});
+      dateFinLabel.textContent="Date de fin (optionnel — ex: paiement échelonné)";
+      const dateFinRow=div("");dateFinRow.style.cssText="display:flex;gap:8px;align-items:center";
+
+      // Sélecteurs mois et année
+      const MOIS_COURT=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+      const dfYear=el("select",{});
+      dfYear.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:14px";
+      dfYear.onclick=e=>e.stopPropagation();
+      const dfMonth=el("select",{});
+      dfMonth.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:14px";
+      dfMonth.onclick=e=>e.stopPropagation();
+
+      // Remplir les années (courante + 3 ans)
+      const curYear=new Date().getFullYear();
+      const noDateOpt=el("option",{value:""});noDateOpt.textContent="— Aucune —";dfYear.appendChild(noDateOpt);
+      for(let y=curYear;y<=curYear+3;y++){const o=el("option",{value:String(y)});o.textContent=String(y);dfYear.appendChild(o);}
+      MOIS_COURT.forEach((m2,i)=>{const o=el("option",{value:String(i+1).padStart(2,"0")});o.textContent=m2;dfMonth.appendChild(o);});
+
+      // Restaurer valeur existante
+      if(item.dateFin){
+        const[fy,fm]=item.dateFin.split("-");
+        dfYear.value=fy;dfMonth.value=fm;
+      } else {
+        dfYear.value="";
+      }
+
+      // Mettre à jour item.dateFin
+      const updateDateFin=()=>{
+        if(!dfYear.value){item.dateFin="";dfMonth.style.display="none";}
+        else{item.dateFin=`${dfYear.value}-${dfMonth.value||"01"}`;dfMonth.style.display="";}
+      };
+      dfYear.onchange=e=>{e.stopPropagation();updateDateFin();};
+      dfMonth.onchange=e=>{e.stopPropagation();updateDateFin();};
+      if(!item.dateFin)dfMonth.style.display="none";
+      dfYear.onchange=e=>{e.stopPropagation();dfMonth.style.display=dfYear.value?"":"none";updateDateFin();};
+
+      dateFinRow.append(dfYear,dfMonth);
+      dateFinWrap.append(dateFinLabel,dateFinRow);
+
+      // Aperçu de la date de fin
+      const dateFinPreview=el("p",{style:"color:#8B5CF6;font-size:11px;margin-top:4px;min-height:16px"});
+      if(item.dateFin){
+        const[fy,fm]=item.dateFin.split("-");
+        dateFinPreview.textContent=`⏱ Fin de paiement : ${MOIS_COURT[+fm-1]} ${fy}`;
+      }
+      dfYear.addEventListener("change",()=>{
+        if(item.dateFin){
+          const[fy,fm]=item.dateFin.split("-");
+          dateFinPreview.textContent=`⏱ Fin de paiement : ${MOIS_COURT[+fm-1]} ${fy}`;
+        } else {dateFinPreview.textContent="";}
+      });
+      dfMonth.addEventListener("change",()=>{
+        if(item.dateFin){
+          const[fy,fm]=item.dateFin.split("-");
+          dateFinPreview.textContent=`⏱ Fin de paiement : ${MOIS_COURT[+fm-1]} ${fy}`;
+        }
+      });
+      dateFinWrap.appendChild(dateFinPreview);
+      m.appendChild(dateFinWrap);
     }
     const btns=div("mbtns");
     if(isEdit&&itemType==="depense"){
@@ -1875,19 +1955,16 @@ function renderModal(modal,data,months,allKeys){
       svAll.onclick=()=>{
         STATE.modalItem=null;
         const u={...item,montant:parseFloat(item.montant)||0};
-        // Appliquer la modification à la même dépense dans tous les mois
         const next={};
         Object.keys(STATE.months).forEach(k=>{
           const m=STATE.months[k];
           next[k]={...m,depenses:m.depenses.map(d=>{
-            // Même dépense = même libellé ET même catégorie d'origine
             if(d.id===u.id){
-              // Mois courant : tout mettre à jour
-              return u;
+              return u; // mois courant — tout mettre à jour
             }
-            // Autres mois : chercher dépense avec même libellé original
+            // Autres mois — même libellé original → propager type, montant, categorie ET dateFin
             if(d.type===modal.item.type){
-              return{...d,type:u.type,montant:u.montant,categorie:u.categorie};
+              return{...d,type:u.type,montant:u.montant,categorie:u.categorie,dateFin:u.dateFin||""};
             }
             return d;
           })};
