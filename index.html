@@ -1865,10 +1865,48 @@ function renderModal(modal,data,months,allKeys){
       m.appendChild(catWrap);
     }
     const btns=div("mbtns");
-    const sv=el("button",{className:"b-save"});sv.textContent="Sauvegarder";
-    sv.onclick=()=>{STATE.modalItem=null;isEdit?saveItem(itemType,item):addItem(itemType,item);};
-    btns.appendChild(sv);
-    if(isEdit&&(itemType==="depense"||itemType==="economie")){const d=el("button",{className:"b-del"});d.textContent="🗑";d.onclick=()=>{STATE.modalItem=null;delItem(itemType,item.id);};btns.appendChild(d);}
+    if(isEdit&&itemType==="depense"){
+      // Deux boutons : mois courant ou tous les mois
+      const sv=el("button",{className:"b-save"});sv.textContent="Ce mois";
+      sv.onclick=()=>{STATE.modalItem=null;saveItem(itemType,item);};
+      btns.appendChild(sv);
+      const svAll=el("button",{className:"b-save"});svAll.textContent="Tous les mois";
+      svAll.style.cssText="flex:1;background:#8B5CF6;border:none;color:#fff;border-radius:10px;padding:12px;font-weight:800;font-size:13px;cursor:pointer";
+      svAll.onclick=()=>{
+        STATE.modalItem=null;
+        const u={...item,montant:parseFloat(item.montant)||0};
+        // Appliquer la modification à la même dépense dans tous les mois
+        const next={};
+        Object.keys(STATE.months).forEach(k=>{
+          const m=STATE.months[k];
+          next[k]={...m,depenses:m.depenses.map(d=>{
+            // Même dépense = même libellé ET même catégorie d'origine
+            if(d.id===u.id){
+              // Mois courant : tout mettre à jour
+              return u;
+            }
+            // Autres mois : chercher dépense avec même libellé original
+            if(d.type===modal.item.type){
+              return{...d,type:u.type,montant:u.montant,categorie:u.categorie};
+            }
+            return d;
+          })};
+        });
+        const allNext={...STATE.months,...next};
+        Object.keys(allNext).forEach(k=>{if(!allNext[k].courses)allNext[k].courses=[];});
+        STATE.months=allNext;
+        setState({modal:null});
+        persist(allNext);
+        notify("✓ Modifié sur tous les mois !");
+      };
+      btns.appendChild(svAll);
+      const d=el("button",{className:"b-del"});d.textContent="🗑";d.onclick=()=>{STATE.modalItem=null;delItem(itemType,item.id);};btns.appendChild(d);
+    } else {
+      const sv=el("button",{className:"b-save"});sv.textContent="Sauvegarder";
+      sv.onclick=()=>{STATE.modalItem=null;isEdit?saveItem(itemType,item):addItem(itemType,item);};
+      btns.appendChild(sv);
+      if(isEdit&&(itemType==="depense"||itemType==="economie")){const d=el("button",{className:"b-del"});d.textContent="🗑";d.onclick=()=>{STATE.modalItem=null;delItem(itemType,item.id);};btns.appendChild(d);}
+    }
     const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>{STATE.modalItem=null;setState({modal:null});};btns.appendChild(ca);m.appendChild(btns);
   }
 
