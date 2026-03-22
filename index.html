@@ -649,8 +649,14 @@ async function init(){
   setState({loading:true});
   const data=await DB.load();
   if(data&&Object.keys(data).length>0){
-    // migration : ajouter courses si absent
     Object.keys(data).forEach(k=>{if(!data[k].courses)data[k].courses=[];});
+    // Choisir le mois à afficher : mois courant si disponible, sinon le plus récent
+    const current=nowKey();
+    const availableKeys=Object.keys(data).sort();
+    const bestKey=availableKeys.includes(current)
+      ? current
+      : availableKeys[availableKeys.length-1]; // le plus récent
+    STATE.curKey=bestKey;
     setState({months:data,loading:false,lastSync:new Date()});
   } else {
     const k=nowKey();const init={[k]:makeMonth()};
@@ -1988,12 +1994,50 @@ function renderModal(modal,data,months,allKeys){
     }
     const btns=div("mbtns");
     if(isEdit&&itemType==="depense"){
-      // Deux boutons : mois courant ou tous les mois
+      // Bouton 1 : Ce mois uniquement
       const sv=el("button",{className:"b-save"});sv.textContent="Ce mois";
+      sv.style.cssText="flex:1;background:#3B82F6;border:none;color:#fff;border-radius:10px;padding:10px;font-weight:800;font-size:12px;cursor:pointer";
       sv.onclick=()=>{STATE.modalItem=null;saveItem(itemType,item);};
       btns.appendChild(sv);
-      const svAll=el("button",{className:"b-save"});svAll.textContent="Tous les mois";
-      svAll.style.cssText="flex:1;background:#8B5CF6;border:none;color:#fff;border-radius:10px;padding:12px;font-weight:800;font-size:13px;cursor:pointer";
+
+      // Bouton 2 : Ce mois et les suivants (pas les passés)
+      const svNext=el("button",{className:"b-save"});svNext.textContent="→ Suivants";
+      svNext.style.cssText="flex:1;background:#10B981;border:none;color:#fff;border-radius:10px;padding:10px;font-weight:800;font-size:12px;cursor:pointer";
+      svNext.title="Met à jour ce mois et tous les mois futurs (pas les mois passés)";
+      svNext.onclick=()=>{
+        STATE.modalItem=null;
+        const u={...item,montant:parseFloat(item.montant)||0};
+        const sortedKeys=Object.keys(STATE.months).sort();
+        const curIdx=sortedKeys.indexOf(STATE.curKey);
+        const next={};
+        sortedKeys.forEach((k,idx)=>{
+          const m=STATE.months[k];
+          if(idx<curIdx){
+            // Mois passés → inchangés
+            next[k]=m;
+          } else {
+            // Mois courant et futurs → mise à jour
+            next[k]={...m,depenses:m.depenses.map(d=>{
+              if(d.id===u.id) return u;
+              if(d.type===modal.item.type)
+                return{...d,type:u.type,montant:u.montant,categorie:u.categorie,dateFin:u.dateFin||""};
+              return d;
+            })};
+          }
+        });
+        const allNext={...STATE.months,...next};
+        Object.keys(allNext).forEach(k=>{if(!allNext[k].courses)allNext[k].courses=[];});
+        STATE.months=allNext;
+        setState({modal:null});
+        persist(allNext);
+        notify("✓ Modifié sur ce mois et les suivants !");
+      };
+      btns.appendChild(svNext);
+
+      // Bouton 3 : Tous les mois
+      const svAll=el("button",{className:"b-save"});svAll.textContent="Tous";
+      svAll.style.cssText="flex:1;background:#8B5CF6;border:none;color:#fff;border-radius:10px;padding:10px;font-weight:800;font-size:12px;cursor:pointer";
+      svAll.title="Met à jour tous les mois y compris les passés";
       svAll.onclick=()=>{
         STATE.modalItem=null;
         const u={...item,montant:parseFloat(item.montant)||0};
@@ -2001,13 +2045,9 @@ function renderModal(modal,data,months,allKeys){
         Object.keys(STATE.months).forEach(k=>{
           const m=STATE.months[k];
           next[k]={...m,depenses:m.depenses.map(d=>{
-            if(d.id===u.id){
-              return u; // mois courant — tout mettre à jour
-            }
-            // Autres mois — même libellé original → propager type, montant, categorie ET dateFin
-            if(d.type===modal.item.type){
+            if(d.id===u.id) return u;
+            if(d.type===modal.item.type)
               return{...d,type:u.type,montant:u.montant,categorie:u.categorie,dateFin:u.dateFin||""};
-            }
             return d;
           })};
         });
