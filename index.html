@@ -528,19 +528,40 @@ const DB={
 
   async _send(data){
     const moisKeys=Object.keys(data).filter(k=>k.match(/^\d{4}-\d{2}$/));
-    console.log("[DB._send] Envoi GAS, mois:", moisKeys.join(','), "meta:", !!data._meta);
+    const jsonStr=JSON.stringify(data);
+    console.log("[DB._send] Envoi GAS, mois:", moisKeys.join(','), "taille:", jsonStr.length, "chars");
+
+    // Stratégie 1 : POST no-cors (toujours autorisé depuis PWA)
     try{
       await fetch(GAS_URL,{
         method:"POST",
-        body:JSON.stringify(data),
+        mode:"no-cors",
+        body:jsonStr,
         headers:{"Content-Type":"text/plain"}
       });
-      console.log("[DB._send] ✅ Envoi GAS réussi");
-      _pendingSave=null; // envoi réussi
-    }catch{
-      console.error("[DB._send] ❌ Échec envoi GAS, retry dans 5s");
-      setTimeout(()=>{if(_pendingSave)DB._send(_pendingSave);},5000);
+      // no-cors retourne toujours "opaque" — on considère réussi si pas d'exception
+      console.log("[DB._send] ✅ POST no-cors envoyé");
+      _pendingSave=null;return;
+    }catch(e){console.warn("[DB._send] POST no-cors échoué:",e.message);}
+
+    // Stratégie 2 : GET avec données encodées (si données < 7000 chars)
+    if(jsonStr.length < 7000){
+      try{
+        const encoded=encodeURIComponent(jsonStr);
+        await fetch(`${GAS_URL}?data=${encoded}`,{mode:"no-cors",redirect:"follow"});
+        console.log("[DB._send] ✅ GET no-cors envoyé");
+        _pendingSave=null;return;
+      }catch(e){console.warn("[DB._send] GET no-cors échoué:",e.message);}
     }
+
+    // Stratégie 3 : sendBeacon
+    try{
+      const ok=navigator.sendBeacon(GAS_URL,new Blob([jsonStr],{type:"text/plain"}));
+      if(ok){console.log("[DB._send] ✅ sendBeacon envoyé");_pendingSave=null;return;}
+    }catch{}
+
+    console.error("[DB._send] ❌ Toutes stratégies échouées, retry 5s");
+    setTimeout(()=>{if(_pendingSave)DB._send(_pendingSave);},5000);
   },
 
   // Envoi forcé et synchrone (pour beforeunload)
