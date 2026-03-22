@@ -530,7 +530,15 @@ const DB={
     const jsonStr=JSON.stringify(data);
     console.log("[DB._send] Envoi GAS, mois:", moisKeys.join(','), "taille:", jsonStr.length, "chars");
 
-    // Stratégie 1 : POST no-cors (toujours autorisé depuis PWA)
+    // Stratégie 1 : GET avec paramètre d (validé fonctionnel)
+    try{
+      const encoded=encodeURIComponent(jsonStr);
+      await fetch(`${GAS_URL}?d=${encoded}`,{mode:"no-cors",redirect:"follow"});
+      console.log("[DB._send] ✅ GET ?d= envoyé");
+      _pendingSave=null;return;
+    }catch(e){console.warn("[DB._send] GET ?d= échoué:",e.message);}
+
+    // Stratégie 2 : POST no-cors
     try{
       await fetch(GAS_URL,{
         method:"POST",
@@ -538,20 +546,9 @@ const DB={
         body:jsonStr,
         headers:{"Content-Type":"text/plain"}
       });
-      // no-cors retourne toujours "opaque" — on considère réussi si pas d'exception
       console.log("[DB._send] ✅ POST no-cors envoyé");
       _pendingSave=null;return;
-    }catch(e){console.warn("[DB._send] POST no-cors échoué:",e.message);}
-
-    // Stratégie 2 : GET avec données encodées (si données < 7000 chars)
-    if(jsonStr.length < 7000){
-      try{
-        const encoded=encodeURIComponent(jsonStr);
-        await fetch(`${GAS_URL}?data=${encoded}`,{mode:"no-cors",redirect:"follow"});
-        console.log("[DB._send] ✅ GET no-cors envoyé");
-        _pendingSave=null;return;
-      }catch(e){console.warn("[DB._send] GET no-cors échoué:",e.message);}
-    }
+    }catch(e){console.warn("[DB._send] POST échoué:",e.message);}
 
     // Stratégie 3 : sendBeacon
     try{
