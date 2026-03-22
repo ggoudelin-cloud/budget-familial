@@ -1462,8 +1462,17 @@ function renderStats(months,allKeys){
   }
 
   // Données triées du plus ancien au plus récent
-  const sorted=[...allKeys].sort();
-  const labels=sorted.map(k=>keyLabel(k));
+  // Exclure les mois sans salaires (mois futurs non encore remplis)
+  const sorted=[...allKeys].sort().filter(k=>{
+    const sal=months[k].salaires.reduce((a,x)=>a+(+x.montant||0),0);
+    return sal>0;
+  });
+
+  if(sorted.length<2){
+    const c=div("card");
+    c.innerHTML=`<p style="color:#64748b;text-align:center;padding:24px 0;font-size:13px">📉 Les statistiques nécessitent au moins 2 mois avec des salaires saisis.</p>`;
+    col.appendChild(c);return col;
+  }
 
   // Calculer les séries mensuelles
   const salaires=sorted.map(k=>months[k].salaires.reduce((a,x)=>a+(+x.montant||0),0));
