@@ -664,7 +664,8 @@ async function init(){
       // Vérifier si l'utilisateur est en train de saisir (champ actif)
       const activeTag=document.activeElement&&document.activeElement.tagName;
       const isTyping=activeTag==="INPUT"||activeTag==="TEXTAREA"||activeTag==="SELECT";
-      if(STATE.modal||STATE.openCourseId||isTyping){
+      const isConfirming=!!document.querySelector(".del-month-confirm");
+      if(STATE.modal||STATE.openCourseId||isTyping||isConfirming){
         STATE.months=d; STATE.lastSync=new Date(); // màj silencieuse sans re-render
       } else {
         setState({months:d,lastSync:new Date()});
@@ -1090,9 +1091,10 @@ function renderApp(){
             holdTimer=setTimeout(()=>{
               e.stopPropagation();
               if(allKeys.length<=1){notify("Impossible de supprimer le seul mois","err");return;}
-              grid.querySelectorAll(".del-month-confirm").forEach(x=>x.remove());
+              // Insérer dans pk (pas grid) pour survivre à renderYearGrid
+              pk.querySelectorAll(".del-month-confirm").forEach(x=>x.remove());
               const cf=div("del-month-confirm");
-              cf.style.cssText="grid-column:1/-1;background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:10px;margin-top:4px";
+              cf.style.cssText="background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:10px;margin-top:10px";
               cf.onclick=e=>e.stopPropagation();
               const msg=el("p",{style:"color:#fca5a5;font-size:12px;margin-bottom:8px;font-weight:600"});
               msg.textContent=`Supprimer ${keyLabel(key)} ?`;
@@ -1110,11 +1112,12 @@ function renderApp(){
               const no=el("button",{type:"button"});no.textContent="Annuler";
               no.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
               no.onclick=e=>{e.stopPropagation();cf.remove();};
-              cfBtns.append(yes,no);cf.append(msg,cfBtns);grid.appendChild(cf);
+              cfBtns.append(yes,no);cf.append(msg,cfBtns);
+              pk.appendChild(cf);
             },600);
           });
-          btn.addEventListener("touchend",()=>clearTimeout(holdTimer));
-          btn.addEventListener("touchmove",()=>clearTimeout(holdTimer));
+          btn.addEventListener("touchend",e=>{clearTimeout(holdTimer);});
+          btn.addEventListener("touchmove",e=>{clearTimeout(holdTimer);});
         }
         grid.appendChild(btn);
       }
