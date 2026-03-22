@@ -210,6 +210,18 @@ function incTotalTries(){localStorage.setItem(TOTAL_TRIES_KEY,String(getTotalTri
 function isPermBlocked(){return getTotalTries()>=MAX_TOTAL_TRIES;}
 const CATEGORIES_BASE=["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
 const CAT_COLORS_EXTRA=["#6366f1","#0ea5e9","#d946ef","#f97316","#14b8a6","#a855f7","#eab308","#78716c"];
+
+// ── Catégories Livret A ────────────────────────────────────────────────────
+const LIVRET_CATS_BASE=["Virement épargne","Vacances","Travaux","Voiture","Impôts","Autre"];
+const LIVRET_CATS_KEY="bf-livret-cats-v1";
+function getLivretCats(){
+  try{const v=localStorage.getItem(LIVRET_CATS_KEY);if(v){const p=JSON.parse(v);if(Array.isArray(p)&&p.length>0)return p;}}catch{}
+  return[...LIVRET_CATS_BASE];
+}
+function saveLivretCats(list,silent=false){
+  try{localStorage.setItem(LIVRET_CATS_KEY,JSON.stringify(list));}catch{}
+  if(!silent)localStorage.setItem("bf-meta-modAt",String(Date.now()));
+}
 // ── localStorage chiffré pour les préférences ──────────────────────────────
 async function lsSet(key,val){
   try{
@@ -431,12 +443,14 @@ function extractAndRestore(payload){
     // Si local est plus récent → on a modifié ici → on garde le local
     if(gasSavedAt>localModAt){
       if(Array.isArray(m.commerces)&&m.commerces.length>0)
-        saveCommerces(m.commerces,true); // silent=true : pas de màj timestamp
+        saveCommerces(m.commerces,true);
       if(Array.isArray(m.cats)&&m.cats.length>0)
-        saveCats(m.cats,true); // silent=true
+        saveCats(m.cats,true);
       if(m.catColors&&typeof m.catColors==="object")
         Object.entries(m.catColors).forEach(([k,v])=>saveCatCustomColor(k,v));
-      // Mettre à jour le timestamp local pour correspondre à GAS
+      if(m.livretA!==undefined) STATE._livretA=m.livretA;
+      if(Array.isArray(m.livretCats)&&m.livretCats.length>0)
+        saveLivretCats(m.livretCats,true);
       localStorage.setItem("bf-meta-modAt",String(gasSavedAt));
     }
     const {_meta,...data}=payload;
@@ -517,6 +531,8 @@ const DB={
         commerces: getCommerces(),
         cats: getCats(),
         catColors: getCatCustomColors(),
+        livretA: STATE._livretA&&typeof STATE._livretA==="object"?STATE._livretA:{solde:0,transactions:[]},
+        livretCats: getLivretCats(),
         savedAt: Date.now()
       }
     };
@@ -570,7 +586,9 @@ let STATE={
   changePinStep:0,changePinOld:"",changePinNew:"",changePinInput:"",changePinError:"",
   months:{},curKey:nowKey(),tab:"dashboard",loading:true,lastSync:null,
   modal:null,filtre:"toutes",monthPick:false,toast:null,toastTimer:null,
-  openCourseId:null, // id de la course dont le panneau d'édition est ouvert
+  openCourseId:null,
+  _livretA:{solde:0,transactions:[]}, // Livret A — synchronisé via GAS
+  _livretForm:{montant:"",type:"depot",cat:""}, // formulaire Livret A persistant
 };
 function setState(p){Object.assign(STATE,p);render();}
 // setSilent met à jour STATE sans render (pour la synchro auto)
@@ -635,7 +653,10 @@ async function init(){
     if(d&&Object.keys(d).length>0){
       Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});
       // Ne pas re-render si un formulaire est en cours de saisie
-      if(STATE.modal||STATE.openCourseId){
+      // Vérifier si l'utilisateur est en train de saisir (champ actif)
+      const activeTag=document.activeElement&&document.activeElement.tagName;
+      const isTyping=activeTag==="INPUT"||activeTag==="TEXTAREA"||activeTag==="SELECT";
+      if(STATE.modal||STATE.openCourseId||isTyping){
         STATE.months=d; STATE.lastSync=new Date(); // màj silencieuse sans re-render
       } else {
         setState({months:d,lastSync:new Date()});
@@ -1393,7 +1414,199 @@ function renderHistorique(months,allKeys){
   rows.forEach(r=>{const d=div("");d.style.marginBottom="12px";d.innerHTML=`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:#94a3b8;font-weight:600">${r.label}</span><span style="color:#EF4444;font-weight:700">${fmt(r.dep)}</span></div><div style="background:#1e3a5f;border-radius:6px;height:8px;overflow:hidden"><div style="background:linear-gradient(90deg,#EF4444,#F59E0B);height:100%;border-radius:6px;width:${Math.round((r.dep/maxDep)*100)}%"></div></div><div style="font-size:11px;color:#475569;margin-top:2px">Réglé : ${r.pp}%</div>`;bc.appendChild(d);});col.appendChild(bc);
 
   const ecc=div("card");ecc.appendChild(el("h3",{className:"ct"},"Épargne cumulée"));
-  let cum=0;[...rows].reverse().forEach(r=>{cum+=r.eco;const li=div("li");li.innerHTML=`<span style="color:#94a3b8;font-size:13px">${r.label}</span><div style="text-align:right"><div style="color:#F59E0B;font-weight:700;font-size:13px">${fmt(r.eco)}/mois</div><div style="color:#64748b;font-size:11px">Cumulé : ${fmt(cum)}</div></div>`;ecc.appendChild(li);});col.appendChild(ecc);
+
+  // ── LIVRET A ──────────────────────────────────────────────────────────────
+  const liv=STATE._livretA&&typeof STATE._livretA==="object"?STATE._livretA:{solde:0,transactions:[]};
+  const livSolde=()=>(STATE._livretA&&STATE._livretA.solde)||0;
+  const livTx=()=>(STATE._livretA&&STATE._livretA.transactions)||[];
+
+  const livretCard=div("");livretCard.style.cssText="background:#0f172a;border-radius:10px;padding:12px;margin-bottom:12px";
+  livretCard.onclick=e=>e.stopPropagation();
+
+  // Header solde
+  const livHdr=div("");livHdr.style.cssText="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px";
+  const livTitle=el("span",{style:"color:#F59E0B;font-weight:700;font-size:14px"});livTitle.textContent="🏦 Livret A";
+  const livSoldeEl=el("span",{style:"color:#F59E0B;font-weight:800;font-size:18px"});livSoldeEl.textContent=fmt(livSolde());
+  livHdr.append(livTitle,livSoldeEl);livretCard.appendChild(livHdr);
+
+  // Jours du mois courant pour le sélecteur de date
+  const [ly,lm]=STATE.curKey.split("-").map(Number);
+  const lDays=new Date(ly,lm,0).getDate();
+  const lDayOpts=Array.from({length:lDays},(_,i)=>`${String(i+1).padStart(2,"0")}/${String(lm).padStart(2,"0")}`);
+
+  // Formulaire ajout transaction
+  const livForm=div("");livForm.style.cssText="display:flex;flex-direction:column;gap:8px;margin-bottom:10px";
+  livForm.onclick=e=>e.stopPropagation();
+
+  // Type dépôt/retrait
+  const livTypeRow=div("");livTypeRow.style.cssText="display:flex;gap:6px";
+  // Persister le formulaire dans STATE pour survivre aux re-renders
+  const lf=STATE._livretForm;
+  let livType=lf.type||"depot";
+  const btnDepot=el("button",{type:"button"});btnDepot.textContent="⬆ Dépôt";
+  btnDepot.style.cssText="flex:1;background:#10B981;border:none;color:#fff;border-radius:8px;padding:7px;font-weight:700;font-size:12px;cursor:pointer";
+  const btnRetrait=el("button",{type:"button"});btnRetrait.textContent="⬇ Retrait";
+  btnRetrait.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:7px;font-weight:700;font-size:12px;cursor:pointer";
+  const updateTypeBtns=()=>{
+    btnDepot.style.background=livType==="depot"?"#10B981":"#334155";
+    btnDepot.style.color=livType==="depot"?"#fff":"#94a3b8";
+    btnRetrait.style.background=livType==="retrait"?"#EF4444":"#334155";
+    btnRetrait.style.color=livType==="retrait"?"#fff":"#94a3b8";
+  };
+  btnDepot.onclick=e=>{e.stopPropagation();livType="depot";lf.type="depot";updateTypeBtns();};
+  btnRetrait.onclick=e=>{e.stopPropagation();livType="retrait";lf.type="retrait";updateTypeBtns();};
+  livTypeRow.append(btnDepot,btnRetrait);livForm.appendChild(livTypeRow);
+
+  // Catégorie
+  const livCatRow=div("");livCatRow.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
+  let livCat=lf.cat||getLivretCats()[0]||"Autre";
+  function renderLivCatBtns(){
+    livCatRow.innerHTML="";
+    getLivretCats().forEach(cat=>{
+      const btn=div("");
+      const sel=cat===livCat;
+      btn.style.cssText=`padding:5px 10px;border-radius:16px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid ${sel?"#3B82F6":"#334155"};background:${sel?"#1d4ed8":"transparent"};color:${sel?"#fff":"#94a3b8"};display:flex;align-items:center;gap:4px`;
+      const nameSp=el("span",{});nameSp.textContent=cat;btn.appendChild(nameSp);
+      btn.onclick=e=>{e.stopPropagation();livCat=cat;lf.cat=cat;renderLivCatBtns();};
+      // Bouton ✕ pour supprimer (sauf si seule catégorie)
+      const delCat=el("span",{});delCat.textContent=" ✕";
+      delCat.style.cssText="font-size:10px;opacity:0.5;cursor:pointer";
+      delCat.onclick=e=>{
+        e.stopPropagation();
+        const cats=getLivretCats();
+        if(cats.length<=1){notify("Impossible de supprimer la dernière catégorie","err");return;}
+        saveLivretCats(cats.filter(x=>x!==cat));
+        if(livCat===cat)livCat=getLivretCats()[0]||"Autre";
+        persist(STATE.months);
+        renderLivCatBtns();
+      };
+      btn.appendChild(delCat);
+      livCatRow.appendChild(btn);
+    });
+    // Bouton + Ajouter catégorie
+    const addCatBtn=div("");
+    addCatBtn.style.cssText="padding:5px 10px;border-radius:16px;font-size:12px;font-weight:700;cursor:pointer;border:2px dashed #334155;color:#64748b;background:transparent";
+    addCatBtn.textContent="+ Catégorie";
+    addCatBtn.onclick=e=>{
+      e.stopPropagation();
+      const existing=livForm.querySelector(".livcat-new-wrap");
+      if(existing){existing.remove();return;}
+      const wrap=div("livcat-new-wrap");wrap.style.cssText="display:flex;gap:6px;margin-top:4px";
+      wrap.onclick=e=>e.stopPropagation();
+      const inp=el("input",{type:"text",placeholder:"Nom de la catégorie…"});
+      inp.style.cssText="flex:1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:6px 10px;color:#f1f5f9;font-size:13px";
+      inp.onclick=e=>e.stopPropagation();
+      const ok=el("button",{type:"button"});ok.textContent="✓";
+      ok.style.cssText="background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:6px 10px;font-weight:700;cursor:pointer";
+      ok.onclick=e=>{
+        e.stopPropagation();
+        const nom=inp.value.trim();
+        if(!nom)return;
+        const cats=getLivretCats();
+        if(cats.map(x=>x.toLowerCase()).includes(nom.toLowerCase())){notify("Catégorie déjà existante","err");return;}
+        saveLivretCats([...cats,nom]);
+        livCat=nom;
+        persist(STATE.months);
+        wrap.remove();
+        renderLivCatBtns();
+        notify("✓ Catégorie ajoutée !");
+      };
+      const cancel=el("button",{type:"button"});cancel.textContent="✕";
+      cancel.style.cssText="background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:6px 10px;cursor:pointer";
+      cancel.onclick=e=>{e.stopPropagation();wrap.remove();};
+      wrap.append(inp,ok,cancel);
+      livForm.appendChild(wrap);
+      setTimeout(()=>inp.focus(),50);
+    };
+    livCatRow.appendChild(addCatBtn);
+  }
+  renderLivCatBtns();
+  livForm.appendChild(livCatRow);
+
+  // Montant + date + bouton
+  const livInputRow=div("");livInputRow.style.cssText="display:flex;gap:6px;align-items:center";
+  const livMntInp=el("input",{type:"number",step:"0.01",placeholder:"Montant…",value:lf.montant||""});
+  livMntInp.style.cssText="flex:1;background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 10px;color:#f1f5f9;font-size:14px";
+  livMntInp.onclick=e=>e.stopPropagation();
+  livMntInp.oninput=e=>{lf.montant=e.target.value;};
+
+  const livDateSel=el("select",{});
+  livDateSel.style.cssText="background:#1e293b;border:1px solid #334155;border-radius:8px;padding:7px 8px;color:#f1f5f9;font-size:13px;width:90px";
+  livDateSel.onclick=e=>e.stopPropagation();
+  const todayFmt=todayStr();
+  lDayOpts.forEach(d=>{const o=el("option",{value:d});o.textContent=d;if(d===todayFmt)o.selected=true;livDateSel.appendChild(o);});
+
+  const livAddBtn=el("button",{type:"button"});livAddBtn.textContent="✓";
+  livAddBtn.style.cssText="background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:7px 12px;font-weight:800;font-size:14px;cursor:pointer";
+  livAddBtn.onclick=e=>{
+    e.stopPropagation();
+    const mnt=parseFloat(livMntInp.value)||0;
+    if(!mnt)return;
+    const tx={id:uid(),date:livDateSel.value,type:livType,cat:livCat,montant:mnt};
+    const txs=[...livTx(),tx].sort((a,b)=>{
+      const [da,ma]=a.date.split("/").map(Number);
+      const [db,mb]=b.date.split("/").map(Number);
+      if(ma!==mb)return mb-ma;return db-da;
+    });
+    const newSolde=livSolde()+(livType==="depot"?mnt:-mnt);
+    STATE._livretA={solde:newSolde,transactions:txs};
+    livSoldeEl.textContent=fmt(newSolde);
+    livMntInp.value="";
+    lf.montant="";
+    persist(STATE.months);
+    notify("✓ Transaction Livret A ajoutée !");
+    renderLivretTx();
+  };
+  livInputRow.append(livMntInp,livDateSel,livAddBtn);livForm.appendChild(livInputRow);
+  livretCard.appendChild(livForm);
+
+  // Liste des transactions
+  const livTxList=div("");
+  function renderLivretTx(){
+    livTxList.innerHTML="";
+    const txs=livTx();
+    if(!txs.length){
+      const p=el("p",{style:"color:#475569;font-size:12px;text-align:center;padding:4px 0"});
+      p.textContent="Aucune transaction";livTxList.appendChild(p);return;
+    }
+    txs.forEach(tx=>{
+      const row=div("");row.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a2744";
+      row.onclick=e=>e.stopPropagation();
+      const dateEl=el("span",{style:"color:#64748b;font-size:11px;width:45px;flex-shrink:0"});dateEl.textContent=tx.date;
+      const typeEl=el("span",{style:`font-size:11px;font-weight:700;color:${tx.type==="depot"?"#10B981":"#EF4444"};flex-shrink:0`});
+      typeEl.textContent=tx.type==="depot"?"⬆":"⬇";
+      const catEl=el("span",{style:"color:#94a3b8;font-size:11px;flex:1;padding:0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"});
+      catEl.textContent=tx.cat||"";
+      const mntEl=el("span",{style:`color:${tx.type==="depot"?"#10B981":"#EF4444"};font-weight:700;font-size:13px;flex-shrink:0`});
+      mntEl.textContent=(tx.type==="depot"?"+":"-")+fmt(tx.montant);
+      const delBtn=el("button",{type:"button"});delBtn.textContent="✕";
+      delBtn.style.cssText="background:transparent;border:none;color:#475569;font-size:11px;cursor:pointer;padding:0 0 0 6px";
+      delBtn.onclick=e=>{
+        e.stopPropagation();
+        const txs2=livTx().filter(t=>t.id!==tx.id);
+        const newSolde=livSolde()+(tx.type==="depot"?-tx.montant:tx.montant);
+        STATE._livretA={solde:newSolde,transactions:txs2};
+        livSoldeEl.textContent=fmt(newSolde);
+        persist(STATE.months);
+        renderLivretTx();
+      };
+      row.append(dateEl,typeEl,catEl,mntEl,delBtn);livTxList.appendChild(row);
+    });
+  }
+  renderLivretTx();
+  livretCard.appendChild(livTxList);
+  ecc.appendChild(livretCard);
+
+  // ── Épargne mensuelle cumulée ─────────────────────────────────────────────
+  let cum=0;
+  [...rows].reverse().forEach(r=>{
+    cum+=r.eco;
+    const li=div("li");
+    li.innerHTML=`<span style="color:#94a3b8;font-size:13px">${r.label}</span><div style="text-align:right"><div style="color:#F59E0B;font-weight:700;font-size:13px">${fmt(r.eco)}/mois</div><div style="color:#64748b;font-size:11px">Cumulé : ${fmt(cum)}</div></div>`;
+    ecc.appendChild(li);
+  });
+
+  col.appendChild(ecc);
   return col;
 }
 
