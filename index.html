@@ -474,8 +474,7 @@ const DB={
           }
         }catch{}
       }
-    }catch{}
-    console.log("[DB.load] ⚠️ GAS échoué, fallback localStorage...");
+    }catch(err){console.warn("[DB.load] ⚠️ GAS échoué:", err.message, "fallback localStorage...");}
     // 2) Fallback localStorage chiffré
     try{
       const v=localStorage.getItem("bf-local");
