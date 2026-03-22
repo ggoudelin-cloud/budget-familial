@@ -806,9 +806,15 @@ function handleChangePinDigit(d){
   updateChangePinDots();
   if(val.length===4){
     if(STATE.changePinStep===1){
-      if(val===getPin()){STATE.changePinStep=2;STATE.changePinOld=val;STATE.changePinInput="";}
-      else{STATE.changePinInput="";STATE.changePinError="Code actuel incorrect";}
-      updateChangePinDots();
+      // Hasher val et comparer avec le hash stocké
+      hashPin(val).then(hash=>{
+        if(hash===getPinHash()){
+          STATE.changePinStep=2;STATE.changePinOld=val;STATE.changePinInput="";
+        } else {
+          STATE.changePinInput="";STATE.changePinError="Code actuel incorrect";
+        }
+        updateChangePinDots();
+      });
     }
     else if(STATE.changePinStep===2){
       STATE.changePinStep=3;STATE.changePinNew=val;STATE.changePinInput="";
@@ -816,7 +822,8 @@ function handleChangePinDigit(d){
     }
     else if(STATE.changePinStep===3){
       if(val===STATE.changePinNew){
-        hashPin(val).then(h=>{setPinHash(h);});STATE.changePinStep=0;STATE.changePinInput="";STATE.changePinError="";
+        hashPin(val).then(h=>{setPinHash(h);});
+        STATE.changePinStep=0;STATE.changePinInput="";STATE.changePinError="";
         setState({modal:null});notify("✓ Code PIN modifié !");
       } else {
         STATE.changePinInput="";STATE.changePinError="Les codes ne correspondent pas";
