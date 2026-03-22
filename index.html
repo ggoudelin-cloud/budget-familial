@@ -243,6 +243,7 @@ function getCats(){
 }
 function saveCats(cats){
   try{localStorage.setItem(CATS_KEY,JSON.stringify(cats));}catch{}
+  localStorage.setItem("bf-meta-modAt",String(Date.now()));
 }
 const CAT_COLORS={logement:"#3B82F6",assurances:"#10B981",abonnements:"#8B5CF6","crédits":"#EF4444","vie courante":"#F59E0B",transport:"#06B6D4",enfants:"#EC4899",animaux:"#84CC16",autre:"#9CA3AF"};
 const CAT_COLORS_KEY="bf-cat-colors-v2";
@@ -322,8 +323,8 @@ function getCommerces(){
 }
 
 function saveCommerces(list){
-  // Synchrone — pas d'async pour garantir la cohérence
   try{localStorage.setItem(COMMERCES_KEY,JSON.stringify(list));}catch{}
+  localStorage.setItem("bf-meta-modAt",String(Date.now()));
 }
 
 function addCommerce(nom){
@@ -423,12 +424,20 @@ function extractAndRestore(payload){
   // Restaurer commerces/cats/couleurs si présents dans le payload
   if(payload._meta){
     const m=payload._meta;
-    if(Array.isArray(m.commerces)&&m.commerces.length>0)
-      saveCommerces(m.commerces);
-    if(Array.isArray(m.cats)&&m.cats.length>0)
-      saveCats(m.cats);
-    if(m.catColors&&typeof m.catColors==="object")
-      Object.entries(m.catColors).forEach(([k,v])=>saveCatCustomColor(k,v));
+    // Ne restaurer que si le payload GAS est plus récent que la dernière
+    // modification locale des commerces/cats (évite d'écraser les suppressions)
+    const gasSavedAt=m.savedAt||0;
+    const localModAt=parseInt(localStorage.getItem("bf-meta-modAt")||"0");
+    const gasIsNewer=gasSavedAt>localModAt;
+
+    if(gasIsNewer){
+      if(Array.isArray(m.commerces)&&m.commerces.length>0)
+        saveCommerces(m.commerces);
+      if(Array.isArray(m.cats)&&m.cats.length>0)
+        saveCats(m.cats);
+      if(m.catColors&&typeof m.catColors==="object")
+        Object.entries(m.catColors).forEach(([k,v])=>saveCatCustomColor(k,v));
+    }
     // Retourner les données sans le _meta
     const {_meta,...data}=payload;
     return Object.keys(data).length>0?data:null;
