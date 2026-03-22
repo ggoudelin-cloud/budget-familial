@@ -893,11 +893,15 @@ function render(){
     const isTyping=activeTag==="INPUT"||activeTag==="TEXTAREA"||activeTag==="SELECT";
     if(isTyping) return; // ne pas écraser la saisie en cours
   }
+  // Mémoriser la position de scroll pour la restaurer après render
+  const scrollY=window.scrollY||document.documentElement.scrollTop;
   const root=document.getElementById("root");root.innerHTML="";
   if(STATE.screen==="setup"){root.appendChild(renderSetup());return;}
   if(STATE.screen==="pin"){root.appendChild(renderPin());return;}
   if(STATE.loading){root.appendChild(div("loader",div("spinner"),el("p",{style:"color:#94a3b8;margin-top:14px"},"Chargement…")));return;}
   root.appendChild(renderApp());
+  // Restaurer la position de scroll
+  if(scrollY>0) requestAnimationFrame(()=>window.scrollTo(0,scrollY));
 }
 
 // SETUP SCREEN — création du PIN au premier lancement
@@ -2120,11 +2124,15 @@ function renderModal(modal,data,months,allKeys){
       m.appendChild(el("label",{},"Libellé"));
       const libelleInp=el("input",{type:"text",value:item.type||"",placeholder:"ex: Cinéma"});
       libelleInp.oninput=e=>{item.type=e.target.value;};
+      libelleInp.onclick=e=>e.stopPropagation();
+      libelleInp.onfocus=e=>e.stopPropagation();
       m.appendChild(libelleInp);
     }
     m.appendChild(el("label",{},"Montant (€)"));
     const montantInp=el("input",{type:"number",step:"0.01",value:item.montant||""});
     montantInp.oninput=e=>{item.montant=e.target.value;};
+    montantInp.onclick=e=>e.stopPropagation();
+    montantInp.onfocus=e=>e.stopPropagation();
     m.appendChild(montantInp);
     if(itemType==="depense"){
       m.appendChild(el("label",{},"Catégories"));
