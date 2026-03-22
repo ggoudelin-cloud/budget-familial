@@ -530,33 +530,18 @@ const DB={
     const jsonStr=JSON.stringify(data);
     console.log("[DB._send] Envoi GAS, mois:", moisKeys.join(','), "taille:", jsonStr.length, "chars");
 
-    // Stratégie 1 : GET avec paramètre d (validé fonctionnel)
+    // Stratégie 1 : POST no-cors — fonctionne toujours, on n'attend pas la réponse
     try{
-      const encoded=encodeURIComponent(jsonStr);
-      await fetch(`${GAS_URL}?d=${encoded}`,{mode:"no-cors",redirect:"follow"});
-      console.log("[DB._send] ✅ GET ?d= envoyé");
-      _pendingSave=null;return;
-    }catch(e){console.warn("[DB._send] GET ?d= échoué:",e.message);}
-
-    // Stratégie 2 : POST no-cors
-    try{
-      await fetch(GAS_URL,{
+      fetch(GAS_URL,{
         method:"POST",
         mode:"no-cors",
-        body:jsonStr,
-        headers:{"Content-Type":"text/plain"}
-      });
-      console.log("[DB._send] ✅ POST no-cors envoyé");
+        body:jsonStr
+      }); // pas d'await — fire and forget
+      console.log("[DB._send] ✅ POST no-cors lancé");
       _pendingSave=null;return;
     }catch(e){console.warn("[DB._send] POST échoué:",e.message);}
 
-    // Stratégie 3 : sendBeacon
-    try{
-      const ok=navigator.sendBeacon(GAS_URL,new Blob([jsonStr],{type:"text/plain"}));
-      if(ok){console.log("[DB._send] ✅ sendBeacon envoyé");_pendingSave=null;return;}
-    }catch{}
-
-    console.error("[DB._send] ❌ Toutes stratégies échouées, retry 5s");
+    console.error("[DB._send] ❌ Échec, retry 5s");
     setTimeout(()=>{if(_pendingSave)DB._send(_pendingSave);},5000);
   },
 
