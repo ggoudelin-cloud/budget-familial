@@ -1036,58 +1036,97 @@ function renderApp(){
   if(monthPick){
     const ol=div("overlay2");ol.onclick=()=>setState({monthPick:false});
     const pk=div("picker");pk.onclick=e=>e.stopPropagation();
-    pk.appendChild(el("p",{className:"ptitle"},"Choisir un mois"));
-    allKeys.forEach(k=>{
-      const row=div("");row.style.cssText="display:flex;align-items:center;gap:4px;margin-bottom:2px";
-      const b=el("button",{className:"pbtn"+(k===curKey?" on":"")});
-      b.style.cssText="flex:1;margin:0";
-      b.textContent=keyLabel(k);
-      b.onclick=()=>setState({curKey:k,monthPick:false});
-      // Bouton supprimer — désactivé si c'est le seul mois
-      const del=el("button",{type:"button"});
-      del.textContent="🗑";
-      del.style.cssText="background:#7f1d1d;border:none;color:#fca5a5;border-radius:8px;padding:5px 8px;font-size:13px;cursor:pointer;flex-shrink:0";
-      del.title="Supprimer ce mois";
-      if(allKeys.length<=1){
-        del.disabled=true;
-        del.style.opacity="0.3";
-        del.style.cursor="not-allowed";
+    pk.style.cssText="background:#1e293b;border-radius:12px;padding:14px;width:300px;box-shadow:0 8px 24px rgba(0,0,0,.6)";
+
+    // Grouper par année
+    const byYear={};
+    allKeys.forEach(k=>{const[y]=k.split("-");if(!byYear[y])byYear[y]=[];byYear[y].push(k);});
+    const years=Object.keys(byYear).sort();
+    const MOIS_COURT=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+
+    // Année affichée = année du mois courant
+    let displayYear=curKey.split("-")[0];
+    if(!byYear[displayYear])displayYear=years[years.length-1];
+
+    function renderYearGrid(){
+      pk.innerHTML="";
+
+      // ── Navigation année ──
+      const nav=div("");nav.style.cssText="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px";
+      const prevBtn=el("button",{type:"button"});prevBtn.textContent="❮";
+      prevBtn.style.cssText="background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:8px;padding:4px 10px;font-size:16px;cursor:pointer";
+      const yearLbl=el("span",{});yearLbl.style.cssText="color:#f1f5f9;font-weight:800;font-size:16px";
+      yearLbl.textContent=displayYear;
+      const nextBtn=el("button",{type:"button"});nextBtn.textContent="❯";
+      nextBtn.style.cssText="background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:8px;padding:4px 10px;font-size:16px;cursor:pointer";
+
+      const prevIdx=years.indexOf(displayYear)-1;
+      const nextIdx=years.indexOf(displayYear)+1;
+      prevBtn.disabled=prevIdx<0;prevBtn.style.opacity=prevIdx<0?"0.3":"1";
+      nextBtn.disabled=nextIdx>=years.length;nextBtn.style.opacity=nextIdx>=years.length?"0.3":"1";
+      prevBtn.onclick=e=>{e.stopPropagation();if(prevIdx>=0){displayYear=years[prevIdx];renderYearGrid();}};
+      nextBtn.onclick=e=>{e.stopPropagation();if(nextIdx<years.length){displayYear=years[nextIdx];renderYearGrid();}};
+
+      nav.append(prevBtn,yearLbl,nextBtn);pk.appendChild(nav);
+
+      // ── Grille 4x3 ──
+      const grid=div("");grid.style.cssText="display:grid;grid-template-columns:repeat(4,1fr);gap:5px";
+      for(let mi=1;mi<=12;mi++){
+        const mStr=String(mi).padStart(2,"0");
+        const key=`${displayYear}-${mStr}`;
+        const exists=(byYear[displayYear]||[]).includes(key);
+        const btn=el("button",{type:"button"});
+        btn.textContent=MOIS_COURT[mi-1];
+        const isActive=key===curKey;
+        if(!exists){
+          btn.style.cssText="background:transparent;border:1px dashed #1e3a5f;color:#334155;border-radius:8px;padding:8px 4px;font-size:12px;cursor:default";
+          btn.disabled=true;
+        } else {
+          btn.style.cssText=`background:${isActive?"#1d4ed8":"#0f172a"};border:1px solid ${isActive?"#3B82F6":"#334155"};color:${isActive?"#fff":"#cbd5e1"};border-radius:8px;padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer`;
+          btn.onclick=()=>setState({curKey:key,monthPick:false});
+          // Appui long → suppression
+          let holdTimer=null;
+          btn.addEventListener("touchstart",e=>{
+            holdTimer=setTimeout(()=>{
+              e.stopPropagation();
+              if(allKeys.length<=1){notify("Impossible de supprimer le seul mois","err");return;}
+              grid.querySelectorAll(".del-month-confirm").forEach(x=>x.remove());
+              const cf=div("del-month-confirm");
+              cf.style.cssText="grid-column:1/-1;background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:10px;margin-top:4px";
+              cf.onclick=e=>e.stopPropagation();
+              const msg=el("p",{style:"color:#fca5a5;font-size:12px;margin-bottom:8px;font-weight:600"});
+              msg.textContent=`Supprimer ${keyLabel(key)} ?`;
+              const cfBtns=div("");cfBtns.style.cssText="display:flex;gap:8px";
+              const yes=el("button",{type:"button"});yes.textContent="✓ Oui";
+              yes.style.cssText="flex:1;background:#EF4444;border:none;color:#fff;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
+              yes.onclick=e=>{
+                e.stopPropagation();
+                const next={...STATE.months};delete next[key];
+                const newKeys=Object.keys(next).sort().reverse();
+                const newCurKey=key===curKey?(newKeys[0]||nowKey()):curKey;
+                STATE.months=next;STATE.curKey=newCurKey;STATE.monthPick=false;
+                persist(next);notify("✓ Mois supprimé");
+              };
+              const no=el("button",{type:"button"});no.textContent="Annuler";
+              no.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
+              no.onclick=e=>{e.stopPropagation();cf.remove();};
+              cfBtns.append(yes,no);cf.append(msg,cfBtns);grid.appendChild(cf);
+            },600);
+          });
+          btn.addEventListener("touchend",()=>clearTimeout(holdTimer));
+          btn.addEventListener("touchmove",()=>clearTimeout(holdTimer));
+        }
+        grid.appendChild(btn);
       }
-      del.onclick=e=>{
-        e.stopPropagation();
-        if(allKeys.length<=1){notify("Impossible de supprimer le seul mois","err");return;}
-        // Confirmation inline
-        const existing=pk.querySelector(".del-month-confirm");
-        if(existing){existing.remove();return;}
-        pk.querySelectorAll(".del-month-confirm").forEach(x=>x.remove());
-        const cf=div("del-month-confirm");
-        cf.style.cssText="background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:10px;margin:4px 0";
-        cf.onclick=e=>e.stopPropagation();
-        const msg=el("p",{style:"color:#fca5a5;font-size:12px;margin-bottom:8px;font-weight:600"});
-        msg.textContent=`Supprimer ${keyLabel(k)} ?`;
-        const btns=div("");btns.style.cssText="display:flex;gap:8px";
-        const yes=el("button",{type:"button"});yes.textContent="✓ Confirmer";
-        yes.style.cssText="flex:1;background:#EF4444;border:none;color:#fff;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
-        yes.onclick=e=>{
-          e.stopPropagation();
-          const next={...STATE.months};
-          delete next[k];
-          // Si on supprime le mois affiché, aller sur le plus récent
-          const newKeys=Object.keys(next).sort().reverse();
-          const newCurKey=k===curKey?(newKeys[0]||nowKey()):curKey;
-          STATE.months=next;STATE.curKey=newCurKey;STATE.monthPick=false;
-          persist(next);
-          notify("✓ Mois supprimé");
-        };
-        const no=el("button",{type:"button"});no.textContent="Annuler";
-        no.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
-        no.onclick=e=>{e.stopPropagation();cf.remove();};
-        btns.append(yes,no);cf.append(msg,btns);
-        pk.appendChild(cf);
-      };
-      row.append(b,del);
-      pk.appendChild(row);
-    });
+      pk.appendChild(grid);
+
+      // Hint suppression
+      const hint=el("p",{});hint.style.cssText="color:#334155;font-size:10px;text-align:center;margin-top:10px";
+      hint.textContent="Appui long sur un mois pour le supprimer";
+      pk.appendChild(hint);
+    }
+
+    renderYearGrid();
     ol.appendChild(pk);wrap.appendChild(ol);
   }
   if(toast){const t=el("div",{className:"toast"+(toast.err?" err":"")});t.textContent=toast.msg;wrap.appendChild(t);}
