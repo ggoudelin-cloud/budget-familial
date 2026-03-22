@@ -421,24 +421,24 @@ function makeMonth(srcDeps,srcMonth){
 // Extrait les données budget et restaure les méta (commerces/cats) depuis un payload
 function extractAndRestore(payload){
   if(!payload||typeof payload!=="object")return null;
-  // Restaurer commerces/cats/couleurs si présents dans le payload
   if(payload._meta){
     const m=payload._meta;
-    // Ne restaurer que si le payload GAS est plus récent que la dernière
-    // modification locale des commerces/cats (évite d'écraser les suppressions)
     const gasSavedAt=m.savedAt||0;
     const localModAt=parseInt(localStorage.getItem("bf-meta-modAt")||"0");
-    const gasIsNewer=gasSavedAt>localModAt;
 
-    if(gasIsNewer){
+    // Le plus récent gagne (last-write-wins)
+    // Si GAS est plus récent → il a été modifié depuis un autre appareil → on restaure
+    // Si local est plus récent → on a modifié ici → on garde le local
+    if(gasSavedAt>localModAt){
       if(Array.isArray(m.commerces)&&m.commerces.length>0)
         saveCommerces(m.commerces);
       if(Array.isArray(m.cats)&&m.cats.length>0)
         saveCats(m.cats);
       if(m.catColors&&typeof m.catColors==="object")
         Object.entries(m.catColors).forEach(([k,v])=>saveCatCustomColor(k,v));
+      // Mettre à jour le timestamp local pour correspondre à GAS
+      localStorage.setItem("bf-meta-modAt",String(gasSavedAt));
     }
-    // Retourner les données sans le _meta
     const {_meta,...data}=payload;
     return Object.keys(data).length>0?data:null;
   }
