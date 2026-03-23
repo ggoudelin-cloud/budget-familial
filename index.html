@@ -495,7 +495,18 @@ function extractAndRestore(payload){
   }
   return payload;
 }
-let _pendingSave=null; // données en attente d'envoi vers GAS
+// _pendingSave persisté en localStorage pour survivre à la fermeture de l'app
+let _pendingSave=null;
+const PENDING_KEY="bf-pending-save";
+function setPending(data){
+  _pendingSave=data;
+  if(data) try{localStorage.setItem(PENDING_KEY,JSON.stringify(data));}catch{}
+  else try{localStorage.removeItem(PENDING_KEY);}catch{}
+}
+function loadPending(){
+  try{const v=localStorage.getItem(PENDING_KEY);if(v)return JSON.parse(v);}catch{}
+  return null;
+}
 
 const DB={
   async load(){
@@ -584,7 +595,7 @@ const DB={
       try{localStorage.setItem("bf-local",JSON.stringify(payload));}catch{}
     }
     // 3) Envoi GAS IMMÉDIAT
-    _pendingSave=payload;
+    setPending(payload);
     await DB._send(payload);
   },
 
@@ -601,7 +612,7 @@ const DB={
         body:jsonStr
       }); // pas d'await — fire and forget
       console.log("[DB._send] ✅ POST no-cors lancé");
-      _pendingSave=null;return;
+      setPending(null);return;
     }catch(e){console.warn("[DB._send] POST échoué:",e.message);}
 
     console.error("[DB._send] ❌ Échec, retry 5s");
@@ -676,6 +687,22 @@ async function init(){
       if(idx !== -1){ list[idx]="Biocoop"; localStorage.setItem("bf-commerces",JSON.stringify(list)); }
     }
   } catch{}
+
+  // Reprendre l'envoi en attente si connexion revenue
+  _pendingSave=loadPending();
+  if(_pendingSave){
+    console.log("[init] Données en attente trouvées — tentative d'envoi...");
+    DB._send(_pendingSave);
+  }
+
+  // Détecter le retour de connexion internet
+  window.addEventListener("online",()=>{
+    console.log("[online] Connexion rétablie");
+    if(_pendingSave){
+      console.log("[online] Envoi des données en attente...");
+      DB._send(_pendingSave);
+    }
+  });
   setState({loading:true});
   const data=await DB.load();
   if(data&&Object.keys(data).length>0){
