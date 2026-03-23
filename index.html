@@ -688,6 +688,22 @@ async function persist(months){
 }
 function updCur(fn){const m=fn(STATE.months[STATE.curKey]);const next={...STATE.months,[STATE.curKey]:m};persist(next);}
 
+// Coche automatiquement les dépenses du mois courant dont le jour de prélèvement est passé
+function autoCocherPrelevements(months){
+  const todayDay=new Date().getDate();
+  const todayKey=nowKey();
+  if(!months[todayKey])return false;
+  let changed=false;
+  months[todayKey].depenses=months[todayKey].depenses.map(d=>{
+    if(d.jourPrelevement&&d.jourPrelevement<=todayDay&&!d.paye){
+      changed=true;
+      return{...d,paye:true};
+    }
+    return d;
+  });
+  return changed;
+}
+
 async function init(){
   // Migration : renommer "Bio c' Bon" en "Biocoop" dans les commerces sauvegardés
   try {
@@ -728,19 +744,7 @@ async function init(){
   if(data&&Object.keys(data).length>0){
     Object.keys(data).forEach(k=>{if(!data[k].courses)data[k].courses=[];});
     // Cochage automatique des dépenses dont le jour de prélèvement est passé ce mois
-    const todayDay=new Date().getDate();
-    const todayKey2=nowKey();
-    let autoCoched=false;
-    if(data[todayKey2]){
-      data[todayKey2].depenses=data[todayKey2].depenses.map(d=>{
-        // Cocher si : jour de prélèvement défini ET jour <= aujourd'hui ET pas encore cochée
-        if(d.jourPrelevement&&d.jourPrelevement<=todayDay&&!d.paye){
-          autoCoched=true;
-          return{...d,paye:true};
-        }
-        return d;
-      });
-    }
+    const autoCoched=autoCocherPrelevements(data);
     // Choisir le mois à afficher
     const current=nowKey();
     const availableKeys=Object.keys(data).sort();
@@ -757,16 +761,18 @@ async function init(){
     const d=await DB.load();
     if(d&&Object.keys(d).length>0){
       Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});
-      // Ne pas re-render si un formulaire est en cours de saisie
-      // Vérifier si l'utilisateur est en train de saisir (champ actif)
+      // Cochage automatique des prélèvements passés
+      const autoCoched=autoCocherPrelevements(d);
       const activeTag=document.activeElement&&document.activeElement.tagName;
       const isTyping=activeTag==="INPUT"||activeTag==="TEXTAREA"||activeTag==="SELECT";
       const isConfirming=!!document.querySelector(".del-month-confirm");
       if(STATE.modal||STATE.openCourseId||isTyping||isConfirming){
-        STATE.months=d; STATE.lastSync=new Date(); // màj silencieuse sans re-render
+        STATE.months=d;STATE.lastSync=new Date();
       } else {
         setState({months:d,lastSync:new Date()});
       }
+      // Sauvegarder si des prélèvements ont été cochés automatiquement
+      if(autoCoched){DB.save(d);notify("✓ Prélèvements du jour cochés automatiquement");}
     }
   },15000);
 }
