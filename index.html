@@ -727,14 +727,28 @@ async function init(){
   const data=await DB.load();
   if(data&&Object.keys(data).length>0){
     Object.keys(data).forEach(k=>{if(!data[k].courses)data[k].courses=[];});
-    // Choisir le mois à afficher : mois courant si disponible, sinon le plus récent
+    // Cochage automatique des dépenses dont le jour de prélèvement est passé ce mois
+    const todayDay=new Date().getDate();
+    const todayKey2=nowKey();
+    let autoCoched=false;
+    if(data[todayKey2]){
+      data[todayKey2].depenses=data[todayKey2].depenses.map(d=>{
+        // Cocher si : jour de prélèvement défini ET jour <= aujourd'hui ET pas encore cochée
+        if(d.jourPrelevement&&d.jourPrelevement<=todayDay&&!d.paye){
+          autoCoched=true;
+          return{...d,paye:true};
+        }
+        return d;
+      });
+    }
+    // Choisir le mois à afficher
     const current=nowKey();
     const availableKeys=Object.keys(data).sort();
-    const bestKey=availableKeys.includes(current)
-      ? current
-      : availableKeys[availableKeys.length-1]; // le plus récent
+    const bestKey=availableKeys.includes(current)?current:availableKeys[availableKeys.length-1];
     STATE.curKey=bestKey;
     setState({months:data,loading:false,lastSync:new Date()});
+    // Sauvegarder si des dépenses ont été cochées automatiquement
+    if(autoCoched){DB.save(data);notify("✓ Prélèvements du jour cochés automatiquement");}
   } else {
     const k=nowKey();const init={[k]:makeMonth()};
     setState({months:init,loading:false,lastSync:new Date()});DB.save(init);
@@ -1570,6 +1584,16 @@ function renderDepenses(data){
       ptBadge.textContent=getPaymentLabel(d.paymentType);
       info.appendChild(ptBadge);
     }
+    // Badge jour de prélèvement
+    if(d.jourPrelevement){
+      const today=new Date().getDate();
+      const isToday=d.jourPrelevement===today;
+      const jBadge=el("span",{className:"pill"});
+      jBadge.style.cssText=`background:${isToday?"#10B98133":"#1e3a5f"};color:${isToday?"#10B981":"#64748b"};border:1px solid ${isToday?"#10B981":"#334155"};margin-left:4px;font-size:10px`;
+      jBadge.textContent=`📅 ${d.jourPrelevement}`;
+      jBadge.title=`Prélèvement automatique le ${d.jourPrelevement} du mois`;
+      info.appendChild(jBadge);
+    }
     const mnt=el("span",{style:`color:${d.paye?"#64748b":"#f1f5f9"};font-weight:700;font-size:14px;margin-right:8px`});mnt.textContent=fmt(d.montant);
     const eb=el("button",{className:"eBtn"});eb.textContent="✏️";eb.onclick=()=>setState({modal:{type:"edit",itemType:"depense",item:{...d}}});
     row.append(chk,info,mnt,eb);col.appendChild(row);
@@ -2368,7 +2392,25 @@ function renderModal(modal,data,months,allKeys){
       dateFinWrap.appendChild(dateFinPreview);
       m.appendChild(dateFinWrap);
 
-      // ── Reporter sur les mois suivants (uniquement en mode ajout) ──
+      // ── Jour de prélèvement automatique ──
+      const jourWrap=div("");jourWrap.style.cssText="margin-top:12px";
+      jourWrap.onclick=e=>e.stopPropagation();
+      const jourLabel=el("label",{style:"display:block;margin-bottom:6px"});
+      jourLabel.textContent="Jour de prélèvement automatique (optionnel)";
+      jourWrap.appendChild(jourLabel);
+      const jourRow=div("");jourRow.style.cssText="display:flex;align-items:center;gap:8px";
+      const jourInp=el("input",{type:"number",min:"1",max:"31",placeholder:"ex: 5",value:item.jourPrelevement||""});
+      jourInp.style.cssText="width:80px;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:7px 10px;color:#f1f5f9;font-size:14px";
+      jourInp.onclick=e=>e.stopPropagation();
+      jourInp.oninput=e=>{
+        const v=parseInt(e.target.value);
+        item.jourPrelevement=(v>=1&&v<=31)?v:0;
+      };
+      const jourDesc=el("span",{style:"color:#64748b;font-size:11px"});
+      jourDesc.textContent="Se cochera automatiquement ce jour chaque mois";
+      jourRow.append(jourInp,jourDesc);
+      jourWrap.appendChild(jourRow);
+      m.appendChild(jourWrap);
       if(!isEdit){
         const reporterWrap=div("");reporterWrap.style.cssText="margin-top:12px;background:#0f172a;border-radius:8px;padding:10px";
         reporterWrap.onclick=e=>e.stopPropagation();
