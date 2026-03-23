@@ -2579,6 +2579,11 @@ function renderModal(modal,data,months,allKeys){
       const d=el("button",{className:"b-del"});d.textContent="🗑";
       d.onclick=e=>{
         e.stopPropagation();
+        // Bloquer la suppression de la dépense Alimentation
+        if(item.type==="Alimentation"){
+          notify("⚠️ La dépense Alimentation ne peut pas être supprimée — elle est utilisée pour le suivi des courses","err");
+          return;
+        }
         // Afficher un menu de choix inline
         const existing=m.querySelector(".del-choice");
         if(existing){existing.remove();return;}
@@ -2604,7 +2609,7 @@ function renderModal(modal,data,months,allKeys){
           sortedKeys.forEach((k,idx)=>{
             const mo=STATE.months[k];
             if(idx<curIdx){
-              next[k]=mo; // mois passés inchangés
+              next[k]=mo;
             } else {
               next[k]={...mo,depenses:mo.depenses.filter(d=>d.type!==item.type)};
             }
@@ -2615,11 +2620,28 @@ function renderModal(modal,data,months,allKeys){
           persist(allNext);
           notify("✓ Supprimé sur ce mois et les suivants");
         };
+        // Tous les mois
+        const d4=el("button",{type:"button"});d4.textContent="🗑 Tous les mois";
+        d4.style.cssText="background:#450a0a;border:none;color:#fca5a5;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer;text-align:left";
+        d4.onclick=e=>{
+          e.stopPropagation();
+          STATE.modalItem=null;
+          const next={};
+          Object.keys(STATE.months).forEach(k=>{
+            const mo=STATE.months[k];
+            next[k]={...mo,depenses:mo.depenses.filter(d=>d.type!==item.type)};
+          });
+          const allNext={...STATE.months,...next};
+          STATE.months=allNext;
+          setState({modal:null});
+          persist(allNext);
+          notify("✓ Supprimé sur tous les mois");
+        };
         // Annuler
         const d3=el("button",{type:"button"});d3.textContent="Annuler";
         d3.style.cssText="background:transparent;border:1px solid #334155;color:#64748b;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer";
         d3.onclick=e=>{e.stopPropagation();dc.remove();};
-        dcBtns.append(d1,d2,d3);dc.append(dcTitle,dcBtns);
+        dcBtns.append(d1,d2,d4,d3);dc.append(dcTitle,dcBtns);
         m.appendChild(dc);
       };
       btns.appendChild(d);
