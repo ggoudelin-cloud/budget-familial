@@ -2515,11 +2515,20 @@ function renderModal(modal,data,months,allKeys){
             // Mois passés → inchangés
             next[k]=m;
           } else {
-            // Mois courant et futurs → mise à jour
+            // Mois courant → tout mettre à jour (montant inclus)
+            // Mois futurs → tout sauf le montant (qui peut varier chaque mois)
             next[k]={...m,depenses:m.depenses.map(d=>{
-              if(d.id===u.id) return u;
-              if(d.type===modal.item.type)
-                return{...d,type:u.type,montant:u.montant,categorie:u.categorie,dateFin:u.dateFin||"",paymentType:u.paymentType||"",jourPrelevement:u.jourPrelevement||0};
+              if(d.id===u.id) return u; // mois courant — id exact
+              if(d.type===modal.item.type){
+                const isCurMonth=k===STATE.curKey;
+                return{...d,type:u.type,
+                  montant:isCurMonth?u.montant:d.montant, // montant = inchangé sur autres mois
+                  categorie:u.categorie,
+                  dateFin:u.dateFin||"",
+                  paymentType:u.paymentType||"",
+                  jourPrelevement:u.jourPrelevement||0
+                };
+              }
               return d;
             })};
           }
@@ -2544,9 +2553,17 @@ function renderModal(modal,data,months,allKeys){
         Object.keys(STATE.months).forEach(k=>{
           const m=STATE.months[k];
           next[k]={...m,depenses:m.depenses.map(d=>{
-            if(d.id===u.id) return u;
-            if(d.type===modal.item.type)
-              return{...d,type:u.type,montant:u.montant,categorie:u.categorie,dateFin:u.dateFin||"",paymentType:u.paymentType||"",jourPrelevement:u.jourPrelevement||0};
+            if(d.id===u.id) return u; // mois courant — id exact
+            if(d.type===modal.item.type){
+              const isCurMonth=k===STATE.curKey;
+              return{...d,type:u.type,
+                montant:isCurMonth?u.montant:d.montant, // montant = inchangé sur autres mois
+                categorie:u.categorie,
+                dateFin:u.dateFin||"",
+                paymentType:u.paymentType||"",
+                jourPrelevement:u.jourPrelevement||0
+              };
+            }
             return d;
           })};
         });
