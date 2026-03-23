@@ -692,16 +692,16 @@ function updCur(fn){const m=fn(STATE.months[STATE.curKey]);const next={...STATE.
 function autoCocherPrelevements(months){
   const todayDay=new Date().getDate();
   const todayKey=nowKey();
-  if(!months[todayKey])return false;
-  let changed=false;
+  if(!months[todayKey])return 0;
+  let count=0;
   months[todayKey].depenses=months[todayKey].depenses.map(d=>{
     if(d.jourPrelevement&&d.jourPrelevement<=todayDay&&!d.paye){
-      changed=true;
+      count++;
       return{...d,paye:true};
     }
     return d;
   });
-  return changed;
+  return count;
 }
 
 async function init(){
@@ -752,7 +752,7 @@ async function init(){
     STATE.curKey=bestKey;
     setState({months:data,loading:false,lastSync:new Date()});
     // Sauvegarder si des dépenses ont été cochées automatiquement
-    if(autoCoched){DB.save(data);notify("✓ Prélèvements du jour cochés automatiquement");}
+    if(autoCoched>0){DB.save(data);notify("✓ "+autoCoched+" paiement"+(autoCoched>1?"s":"")+" du jour coché"+(autoCoched>1?"s":"")+" automatiquement");}
   } else {
     const k=nowKey();const init={[k]:makeMonth()};
     setState({months:init,loading:false,lastSync:new Date()});DB.save(init);
@@ -772,7 +772,7 @@ async function init(){
         setState({months:d,lastSync:new Date()});
       }
       // Sauvegarder si des prélèvements ont été cochés automatiquement
-      if(autoCoched){DB.save(d);notify("✓ Prélèvements du jour cochés automatiquement");}
+      if(autoCoched>0){DB.save(d);notify("✓ "+autoCoched+" paiement"+(autoCoched>1?"s":"")+" du jour coché"+(autoCoched>1?"s":"")+" automatiquement");}
     }
   },15000);
 }
