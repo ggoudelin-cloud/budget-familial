@@ -1196,6 +1196,12 @@ function renderApp(){
           btn.disabled=true;
         } else {
           btn.style.cssText=`background:${isActive?"#1d4ed8":"#0f172a"};border:1px solid ${isActive?"#3B82F6":"#334155"};color:${isActive?"#fff":"#cbd5e1"};border-radius:8px;padding:8px 4px;font-size:12px;font-weight:700;cursor:pointer`;
+          // Indicateur visuel : mois courant non supprimable
+          if(key===nowKey()&&!isActive){
+            btn.style.border="1px solid #10B981";
+            btn.style.color="#10B981";
+            btn.title="Mois en cours — non supprimable";
+          }
           btn.onclick=()=>setState({curKey:key,monthPick:false});
           // Appui long → suppression
           let holdTimer=null;
@@ -1203,7 +1209,8 @@ function renderApp(){
             holdTimer=setTimeout(()=>{
               e.stopPropagation();
               if(allKeys.length<=1){notify("Impossible de supprimer le seul mois","err");return;}
-              // Insérer dans pk (pas grid) pour survivre à renderYearGrid
+              // Bloquer la suppression du mois calendaire actuel
+              if(key===nowKey()){notify("Impossible de supprimer le mois en cours","err");return;}
               pk.querySelectorAll(".del-month-confirm").forEach(x=>x.remove());
               const cf=div("del-month-confirm");
               cf.style.cssText="background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:10px;margin-top:10px";
@@ -1216,19 +1223,26 @@ function renderApp(){
               yes.onclick=e=>{
                 e.stopPropagation();
                 const next={...STATE.months};
-                // Préserver les transactions Livret A — les transférer au mois le plus proche
+                // Préserver les transactions Livret A
                 const txASupprimer=(STATE.months[key].livretA||[]);
                 if(txASupprimer.length>0){
                   const autresKeys=Object.keys(next).filter(k=>k!==key).sort();
-                  // Mois suivant en priorité, sinon précédent
                   const cible=autresKeys.find(k=>k>key)||autresKeys[autresKeys.length-1];
-                  if(cible){
-                    next[cible]={...next[cible],livretA:[...(next[cible].livretA||[]),...txASupprimer]};
-                  }
+                  if(cible) next[cible]={...next[cible],livretA:[...(next[cible].livretA||[]),...txASupprimer]};
                 }
                 delete next[key];
-                const newKeys=Object.keys(next).sort().reverse();
-                const newCurKey=key===curKey?(newKeys[0]||nowKey()):curKey;
+                // Si on supprime un mois futur → revenir au mois courant (ou le plus récent disponible)
+                const today=nowKey();
+                let newCurKey;
+                if(key===curKey){
+                  // On supprimait le mois affiché
+                  newCurKey=next[today]?today:(Object.keys(next).sort().reverse()[0]||today);
+                } else if(key>today){
+                  // Mois futur supprimé → rester sur le mois courant si disponible
+                  newCurKey=next[today]?today:curKey;
+                } else {
+                  newCurKey=curKey;
+                }
                 STATE.months=next;STATE.curKey=newCurKey;STATE.monthPick=false;
                 persist(next);notify("✓ Mois supprimé");
               };
