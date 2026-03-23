@@ -2152,6 +2152,7 @@ function renderModal(modal,data,months,allKeys){
     }
     const item=STATE.modalItem;
     const isEdit=modal.type==="edit";
+    let skipDefaultBtns=false;
     const titles={depense:isEdit?"Modifier la dépense":"Nouvelle dépense",salaire:"Modifier le salaire",economie:isEdit?"Modifier l'épargne":"Nouvelle ligne d'épargne",poche:"Argent de poche"};
     m.appendChild(el("h2",{className:"mt"},titles[modal.itemType]||"Modifier"));
     const itemType=modal.itemType;
@@ -2301,7 +2302,82 @@ function renderModal(modal,data,months,allKeys){
       });
       dateFinWrap.appendChild(dateFinPreview);
       m.appendChild(dateFinWrap);
+
+      // ── Reporter sur les mois suivants (uniquement en mode ajout) ──
+      if(!isEdit){
+        const reporterWrap=div("");reporterWrap.style.cssText="margin-top:12px;background:#0f172a;border-radius:8px;padding:10px";
+        reporterWrap.onclick=e=>e.stopPropagation();
+        let reporter=false;
+        const reporterRow=div("");reporterRow.style.cssText="display:flex;align-items:center;gap:10px;cursor:pointer";
+        const chkBox=div("");chkBox.style.cssText="width:20px;height:20px;border-radius:5px;border:2px solid #334155;background:transparent;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px";
+        const reporterLbl=el("span",{style:"color:#cbd5e1;font-size:13px;font-weight:600"});
+        reporterLbl.textContent="Reporter sur les mois suivants";
+        const reporterDesc=el("p",{style:"color:#475569;font-size:11px;margin-top:4px"});
+        reporterDesc.textContent="Cette dépense sera ajoutée sur tous les mois futurs";
+        reporterRow.onclick=e=>{
+          e.stopPropagation();
+          reporter=!reporter;
+          chkBox.style.background=reporter?"#3B82F6":"transparent";
+          chkBox.style.borderColor=reporter?"#3B82F6":"#334155";
+          chkBox.textContent=reporter?"✓":"";
+          if(reporter&&item.dateFin){
+            reporterDesc.textContent=`Sera ajoutée jusqu'à ${item.dateFin}`;
+          } else if(reporter){
+            reporterDesc.textContent="Sera ajoutée sur tous les mois futurs";
+          } else {
+            reporterDesc.textContent="Cette dépense sera ajoutée sur tous les mois futurs";
+          }
+        };
+        reporterRow.append(chkBox,reporterLbl);
+        reporterWrap.append(reporterRow,reporterDesc);
+        m.appendChild(reporterWrap);
+
+        // Remplacer le bouton Sauvegarder pour gérer le report
+        const btns2=div("mbtns");
+        const sv2=el("button",{className:"b-save"});sv2.textContent="Ajouter";
+        sv2.onclick=()=>{
+          STATE.modalItem=null;
+          const u={...item,id:uid(),montant:parseFloat(item.montant)||0,paye:false};
+          if(!reporter){
+            // Ajout simple sur le mois courant
+            updCur(m=>({...m,depenses:[...m.depenses,u]}));
+          } else {
+            // Reporter sur les mois suivants (en tenant compte de dateFin)
+            const sortedKeys=Object.keys(STATE.months).sort();
+            const curIdx=sortedKeys.indexOf(STATE.curKey);
+            const next={};
+            sortedKeys.forEach((k,idx)=>{
+              const mo=STATE.months[k];
+              if(idx<curIdx){
+                next[k]=mo; // mois passés inchangés
+              } else {
+                // Vérifier date de fin
+                if(u.dateFin&&k>u.dateFin){
+                  next[k]=mo; // après date de fin → ne pas ajouter
+                } else {
+                  next[k]={...mo,depenses:[...mo.depenses,{...u,id:uid(),paye:false}]};
+                }
+              }
+            });
+            const allNext={...STATE.months,...next};
+            STATE.months=allNext;
+            setState({modal:null});
+            persist(allNext);
+            const nbMois=Object.keys(allNext).filter(k=>k>=STATE.curKey&&(!u.dateFin||k<=u.dateFin)).length;
+            notify(`✓ Ajoutée sur ${nbMois} mois`);
+            return;
+          }
+          setState({modal:null});
+        };
+        btns2.appendChild(sv2);
+        const ca2=el("button",{className:"b-can"});ca2.textContent="Annuler";ca2.onclick=()=>{STATE.modalItem=null;setState({modal:null});};
+        btns2.appendChild(ca2);
+        m.appendChild(btns2);
+        // btns2 déjà ajoutés — on skip les btns normaux via flag
+        skipDefaultBtns=true;
+      }
     }
+    if(!skipDefaultBtns){
     const btns=div("mbtns");
     if(isEdit&&itemType==="depense"){
       // Bouton 1 : Ce mois uniquement
@@ -2369,7 +2445,54 @@ function renderModal(modal,data,months,allKeys){
         notify("✓ Modifié sur tous les mois !");
       };
       btns.appendChild(svAll);
-      const d=el("button",{className:"b-del"});d.textContent="🗑";d.onclick=()=>{STATE.modalItem=null;delItem(itemType,item.id);};btns.appendChild(d);
+      // Bouton suppression avec choix
+      const d=el("button",{className:"b-del"});d.textContent="🗑";
+      d.onclick=e=>{
+        e.stopPropagation();
+        // Afficher un menu de choix inline
+        const existing=m.querySelector(".del-choice");
+        if(existing){existing.remove();return;}
+        const dc=div("del-choice");
+        dc.style.cssText="background:#1e293b;border:1px solid #EF4444;border-radius:10px;padding:10px;margin-top:8px";
+        dc.onclick=e=>e.stopPropagation();
+        const dcTitle=el("p",{style:"color:#fca5a5;font-size:12px;font-weight:700;margin-bottom:8px"});
+        dcTitle.textContent="Supprimer cette dépense ?";
+        const dcBtns=div("");dcBtns.style.cssText="display:flex;flex-direction:column;gap:6px";
+        // Ce mois seulement
+        const d1=el("button",{type:"button"});d1.textContent="🗑 Ce mois uniquement";
+        d1.style.cssText="background:#334155;border:none;color:#f1f5f9;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer;text-align:left";
+        d1.onclick=e=>{e.stopPropagation();STATE.modalItem=null;delItem(itemType,item.id);};
+        // Ce mois et suivants
+        const d2=el("button",{type:"button"});d2.textContent="🗑 Ce mois et les suivants";
+        d2.style.cssText="background:#7f1d1d;border:none;color:#fca5a5;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer;text-align:left";
+        d2.onclick=e=>{
+          e.stopPropagation();
+          STATE.modalItem=null;
+          const sortedKeys=Object.keys(STATE.months).sort();
+          const curIdx=sortedKeys.indexOf(STATE.curKey);
+          const next={};
+          sortedKeys.forEach((k,idx)=>{
+            const mo=STATE.months[k];
+            if(idx<curIdx){
+              next[k]=mo; // mois passés inchangés
+            } else {
+              next[k]={...mo,depenses:mo.depenses.filter(d=>d.type!==item.type)};
+            }
+          });
+          const allNext={...STATE.months,...next};
+          STATE.months=allNext;
+          setState({modal:null});
+          persist(allNext);
+          notify("✓ Supprimé sur ce mois et les suivants");
+        };
+        // Annuler
+        const d3=el("button",{type:"button"});d3.textContent="Annuler";
+        d3.style.cssText="background:transparent;border:1px solid #334155;color:#64748b;border-radius:8px;padding:8px;font-weight:700;font-size:12px;cursor:pointer";
+        d3.onclick=e=>{e.stopPropagation();dc.remove();};
+        dcBtns.append(d1,d2,d3);dc.append(dcTitle,dcBtns);
+        m.appendChild(dc);
+      };
+      btns.appendChild(d);
     } else {
       const sv=el("button",{className:"b-save"});sv.textContent="Sauvegarder";
       sv.onclick=()=>{STATE.modalItem=null;isEdit?saveItem(itemType,item):addItem(itemType,item);};
@@ -2377,6 +2500,7 @@ function renderModal(modal,data,months,allKeys){
       if(isEdit&&(itemType==="depense"||itemType==="economie")){const d=el("button",{className:"b-del"});d.textContent="🗑";d.onclick=()=>{STATE.modalItem=null;delItem(itemType,item.id);};btns.appendChild(d);}
     }
     const ca=el("button",{className:"b-can"});ca.textContent="Annuler";ca.onclick=()=>{STATE.modalItem=null;setState({modal:null});};btns.appendChild(ca);m.appendChild(btns);
+    } // fin if(!skipDefaultBtns)
   }
 
   // ── Nouveau mois ──
