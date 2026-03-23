@@ -571,8 +571,6 @@ const DB={
   },
 
   async save(data){
-    // Enrichir les données avec commerces et catégories personnalisées
-    // pour les sauvegarder dans GAS et les retrouver après vidage cache
     const payload={
       ...data,
       _meta:{
@@ -585,38 +583,51 @@ const DB={
         savedAt: Date.now()
       }
     };
-    // 1) Sauvegarde locale synchrone IMMÉDIATE
+    // 1) Sauvegarde locale IMMÉDIATE — toujours, réseau ou non
     try{localStorage.setItem("bf-local-json",JSON.stringify(payload));}catch{}
-    // 2) Sauvegarde locale chiffrée
     try{
       const enc=await encryptData(payload);
       localStorage.setItem("bf-local",enc);
     }catch{
       try{localStorage.setItem("bf-local",JSON.stringify(payload));}catch{}
     }
-    // 3) Envoi GAS IMMÉDIAT
+    // 2) Marquer comme en attente d'envoi GAS
     setPending(payload);
-    await DB._send(payload);
+    // 3) Tenter l'envoi si en ligne
+    if(navigator.onLine){
+      await DB._send(payload);
+    } else {
+      console.log("[DB.save] Hors ligne — données sauvegardées localement, envoi différé");
+    }
   },
 
   async _send(data){
-    const moisKeys=Object.keys(data).filter(k=>k.match(/^\d{4}-\d{2}$/));
     const jsonStr=JSON.stringify(data);
-    console.log("[DB._send] Envoi GAS, mois:", moisKeys.join(','), "taille:", jsonStr.length, "chars");
-
-    // Stratégie 1 : POST no-cors — fonctionne toujours, on n'attend pas la réponse
+    // Vérifier la connectivité réseau avant d'envoyer
+    if(!navigator.onLine){
+      console.log("[DB._send] Hors ligne — envoi annulé");
+      return;
+    }
     try{
-      fetch(GAS_URL,{
+      // Utiliser un fetch avec timeout pour détecter l'absence de réseau
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),8000);
+      const r=await fetch(GAS_URL,{
         method:"POST",
         mode:"no-cors",
-        body:jsonStr
-      }); // pas d'await — fire and forget
-      console.log("[DB._send] ✅ POST no-cors lancé");
-      setPending(null);return;
-    }catch(e){console.warn("[DB._send] POST échoué:",e.message);}
-
-    console.error("[DB._send] ❌ Échec, retry 5s");
-    setTimeout(()=>{if(_pendingSave)DB._send(_pendingSave);},5000);
+        body:jsonStr,
+        signal:controller.signal
+      });
+      clearTimeout(timeout);
+      console.log("[DB._send] ✅ Envoi GAS réussi");
+      setPending(null); // succès — effacer la queue
+    }catch(e){
+      console.warn("[DB._send] ❌ Échec envoi:", e.message);
+      // Garder dans la queue — retry dans 10s
+      setTimeout(()=>{
+        if(_pendingSave&&navigator.onLine) DB._send(_pendingSave);
+      },10000);
+    }
   },
 
   // Envoi forcé et synchrone (pour beforeunload)
@@ -690,9 +701,11 @@ async function init(){
 
   // Reprendre l'envoi en attente si connexion revenue
   _pendingSave=loadPending();
-  if(_pendingSave){
-    console.log("[init] Données en attente trouvées — tentative d'envoi...");
+  if(_pendingSave&&navigator.onLine){
+    console.log("[init] Données en attente trouvées — envoi vers GAS...");
     DB._send(_pendingSave);
+  } else if(_pendingSave){
+    console.log("[init] Données en attente — en attente du réseau...");
   }
 
   // Détecter le retour de connexion internet
@@ -700,8 +713,15 @@ async function init(){
     console.log("[online] Connexion rétablie");
     if(_pendingSave){
       console.log("[online] Envoi des données en attente...");
+      notify("📶 Connexion rétablie — synchronisation en cours...");
       DB._send(_pendingSave);
     }
+  });
+
+  // Indicateur visuel hors ligne
+  window.addEventListener("offline",()=>{
+    console.log("[offline] Connexion perdue");
+    notify("📵 Hors ligne — les données sont sauvegardées localement","err");
   });
   setState({loading:true});
   const data=await DB.load();
@@ -1079,7 +1099,11 @@ function renderApp(){
   const hrow=div("hrow");
   const tWrap=div("");
   const si=div("sync-info");
-  si.innerHTML=`<span class="sync-dot" style="background:${lastSync?"#10B981":"#EF4444"}"></span>${lastSync?"Sync "+lastSync.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"Non sync"}`;
+  const isOnline=navigator.onLine;
+  const hasPending=!!_pendingSave;
+  const syncColor=!isOnline?"#F59E0B":hasPending?"#EF4444":lastSync?"#10B981":"#EF4444";
+  const syncText=!isOnline?"📵 Hors ligne":hasPending?"⏳ En attente...":lastSync?"Sync "+lastSync.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"Non sync";
+  si.innerHTML=`<span class="sync-dot" style="background:${syncColor}"></span>${syncText}`;
   tWrap.append(el("h1",{},"💶 Budget Familial"),si);
   const hbtns=div("hbtns");
   const lockB=el("button",{className:"icon-btn",title:"Verrouiller"});lockB.textContent="🔒";lockB.onclick=()=>{localStorage.removeItem(PIN_AUTH_KEY);setState({screen:"pin",pinInput:"",pinError:""});};
