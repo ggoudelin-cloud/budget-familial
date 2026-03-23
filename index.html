@@ -2708,8 +2708,8 @@ function renderModal(modal,data,months,allKeys){
   else if(modal.type==="newMonth"){
     const now=new Date();let year=now.getFullYear(),month=now.getMonth()+1,copy="";
     m.appendChild(el("h2",{className:"mt"},"Nouveau mois"));
-    // Années dynamiques : année courante - 1 jusqu'à année courante + 3
-    const yearOptions=Array.from({length:5},(_,i)=>String(now.getFullYear()-1+i));
+    // Années dynamiques : année courante jusqu'à année courante + 3
+    const yearOptions=Array.from({length:4},(_,i)=>String(now.getFullYear()+i));
     m.appendChild(el("label",{},"Année"));m.appendChild(sel(String(year),yearOptions,v=>{year=+v;}));
     m.appendChild(el("label",{},"Mois"));
     const ms=el("select",{});ms.style.cssText="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:15px;margin-top:4px";
