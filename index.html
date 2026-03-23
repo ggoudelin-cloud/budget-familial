@@ -212,6 +212,32 @@ function isPermBlocked(){return getTotalTries()>=MAX_TOTAL_TRIES;}
 const CATEGORIES_BASE=["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
 const CAT_COLORS_EXTRA=["#6366f1","#0ea5e9","#d946ef","#f97316","#14b8a6","#a855f7","#eab308","#78716c"];
 
+// ── Types de paiement ──────────────────────────────────────────────────────
+const PAYMENT_TYPES_BASE=[
+  {id:"virement", label:"Virement",  color:"#3B82F6"},
+  {id:"prelevement", label:"Prélèvement", color:"#8B5CF6"},
+  {id:"cheque", label:"Chèque",    color:"#F59E0B"},
+  {id:"cb", label:"CB",        color:"#10B981"},
+  {id:"especes", label:"Espèces",   color:"#EC4899"},
+];
+const PAYMENT_TYPES_KEY="bf-payment-types-v1";
+function getPaymentTypes(){
+  try{const v=localStorage.getItem(PAYMENT_TYPES_KEY);if(v){const p=JSON.parse(v);if(Array.isArray(p)&&p.length>0)return p;}}catch{}
+  return JSON.parse(JSON.stringify(PAYMENT_TYPES_BASE));
+}
+function savePaymentTypes(list,silent=false){
+  try{localStorage.setItem(PAYMENT_TYPES_KEY,JSON.stringify(list));}catch{}
+  if(!silent)localStorage.setItem("bf-meta-modAt",String(Date.now()));
+}
+function getPaymentColor(id){
+  const t=getPaymentTypes().find(x=>x.id===id);
+  return t?t.color:"#475569";
+}
+function getPaymentLabel(id){
+  const t=getPaymentTypes().find(x=>x.id===id);
+  return t?t.label:id||"";
+}
+
 // ── Catégories Livret A ────────────────────────────────────────────────────
 const LIVRET_CATS_BASE=["Virement épargne","Vacances","Travaux","Voiture","Impôts","Autre"];
 const LIVRET_CATS_KEY="bf-livret-cats-v1";
@@ -460,6 +486,8 @@ function extractAndRestore(payload){
       if(m.livretA!==undefined) STATE._livretA=m.livretA;
       if(Array.isArray(m.livretCats)&&m.livretCats.length>0)
         saveLivretCats(m.livretCats,true);
+      if(Array.isArray(m.paymentTypes)&&m.paymentTypes.length>0)
+        savePaymentTypes(m.paymentTypes,true);
       localStorage.setItem("bf-meta-modAt",String(gasSavedAt));
     }
     const {_meta,...data}=payload;
@@ -542,6 +570,7 @@ const DB={
         catColors: getCatCustomColors(),
         livretA: STATE._livretA&&typeof STATE._livretA==="object"?STATE._livretA:{solde:0,transactions:[]},
         livretCats: getLivretCats(),
+        paymentTypes: getPaymentTypes(),
         savedAt: Date.now()
       }
     };
@@ -1469,6 +1498,13 @@ function renderDepenses(data){
       badge.textContent=`⏱ fin ${MOIS_COURT[+fm-1]} ${fy}`;
       info.appendChild(badge);
     }
+    // Badge type de paiement
+    if(d.paymentType){
+      const ptBadge=el("span",{className:"pill"});
+      ptBadge.style.cssText=`background:${getPaymentColor(d.paymentType)}33;color:${getPaymentColor(d.paymentType)};border:1px solid ${getPaymentColor(d.paymentType)};margin-left:4px;font-size:10px`;
+      ptBadge.textContent=getPaymentLabel(d.paymentType);
+      info.appendChild(ptBadge);
+    }
     const mnt=el("span",{style:`color:${d.paye?"#64748b":"#f1f5f9"};font-weight:700;font-size:14px;margin-right:8px`});mnt.textContent=fmt(d.montant);
     const eb=el("button",{className:"eBtn"});eb.textContent="✏️";eb.onclick=()=>setState({modal:{type:"edit",itemType:"depense",item:{...d}}});
     row.append(chk,info,mnt,eb);col.appendChild(row);
@@ -2169,6 +2205,39 @@ function renderModal(modal,data,months,allKeys){
       catWrap.appendChild(manageBtn);
       m.appendChild(catWrap);
 
+      // ── Type de paiement ──
+      const ptWrap=div("");ptWrap.style.cssText="margin-top:12px";
+      ptWrap.onclick=e=>e.stopPropagation();
+      const ptLabel=el("label",{style:"display:block;margin-bottom:6px"});ptLabel.textContent="Mode de paiement";
+      ptWrap.appendChild(ptLabel);
+      const ptGrid=div("");ptGrid.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
+      function renderPaymentBtns(){
+        ptGrid.innerHTML="";
+        // Option "Aucun"
+        const noneBtn=div("");
+        const noneSelected=!item.paymentType;
+        noneBtn.style.cssText=`padding:5px 10px;border-radius:16px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid ${noneSelected?"#475569":"#334155"};background:${noneSelected?"#334155":"transparent"};color:${noneSelected?"#f1f5f9":"#64748b"}`;
+        noneBtn.textContent="— Aucun";
+        noneBtn.onclick=e=>{e.stopPropagation();item.paymentType="";renderPaymentBtns();};
+        ptGrid.appendChild(noneBtn);
+        getPaymentTypes().forEach(pt=>{
+          const sel=item.paymentType===pt.id;
+          const btn=div("");
+          btn.style.cssText=`padding:5px 10px;border-radius:16px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid ${sel?pt.color:"#334155"};background:${sel?pt.color+"33":"transparent"};color:${sel?pt.color:"#94a3b8"}`;
+          btn.textContent=pt.label;
+          btn.onclick=e=>{e.stopPropagation();item.paymentType=pt.id;renderPaymentBtns();};
+          ptGrid.appendChild(btn);
+        });
+        // Bouton gérer
+        const manPt=el("button",{type:"button"});manPt.textContent="⚙️";
+        manPt.style.cssText="background:transparent;border:1px solid #334155;color:#64748b;border-radius:16px;padding:5px 8px;font-size:12px;cursor:pointer";
+        manPt.onclick=e=>{e.stopPropagation();setState({modal:{type:"managePaymentTypes",prevModal:STATE.modal}});};
+        ptGrid.appendChild(manPt);
+      }
+      renderPaymentBtns();
+      ptWrap.appendChild(ptGrid);
+      m.appendChild(ptWrap);
+
       // ── Date de fin (optionnelle — paiements échelonnés) ──
       const dateFinWrap=div("");dateFinWrap.style.cssText="margin-top:12px";
       dateFinWrap.onclick=e=>e.stopPropagation();
@@ -2261,7 +2330,7 @@ function renderModal(modal,data,months,allKeys){
             next[k]={...m,depenses:m.depenses.map(d=>{
               if(d.id===u.id) return u;
               if(d.type===modal.item.type)
-                return{...d,type:u.type,montant:u.montant,categorie:u.categorie,dateFin:u.dateFin||""};
+                return{...d,type:u.type,montant:u.montant,categorie:u.categorie,dateFin:u.dateFin||"",paymentType:u.paymentType||""};
               return d;
             })};
           }
@@ -2288,7 +2357,7 @@ function renderModal(modal,data,months,allKeys){
           next[k]={...m,depenses:m.depenses.map(d=>{
             if(d.id===u.id) return u;
             if(d.type===modal.item.type)
-              return{...d,type:u.type,montant:u.montant,categorie:u.categorie,dateFin:u.dateFin||""};
+              return{...d,type:u.type,montant:u.montant,categorie:u.categorie,dateFin:u.dateFin||"",paymentType:u.paymentType||""};
             return d;
           })};
         });
@@ -2311,6 +2380,142 @@ function renderModal(modal,data,months,allKeys){
   }
 
   // ── Nouveau mois ──
+  else if(modal.type==="managePaymentTypes"){
+    m.appendChild(el("h2",{className:"mt"},"⚙️ Modes de paiement"));
+    const PALETTE=["#3B82F6","#8B5CF6","#10B981","#EF4444","#F59E0B","#EC4899","#06B6D4","#f97316","#84CC16","#a855f7","#78716c","#64748b"];
+    const listWrap=div("");listWrap.onclick=e=>e.stopPropagation();
+
+    function renderPTList(){
+      listWrap.innerHTML="";
+
+      // Liste des types existants
+      getPaymentTypes().forEach(pt=>{
+        const card=div("");
+        card.style.cssText=`border:2px solid ${pt.color}33;border-radius:10px;padding:10px;margin-bottom:8px;background:${pt.color}11`;
+        card.onclick=e=>e.stopPropagation();
+
+        // Header carte : pastille + nom + supprimer
+        const hdr=div("");hdr.style.cssText="display:flex;align-items:center;gap:10px;margin-bottom:8px";
+        const dot=div("");dot.style.cssText=`width:14px;height:14px;border-radius:50%;background:${pt.color};flex-shrink:0`;
+        const lbl=el("span",{style:`color:${pt.color};font-weight:800;font-size:14px;flex:1`});lbl.textContent=pt.label;
+        const delBtn=el("button",{type:"button"});delBtn.textContent="✕";
+        delBtn.style.cssText="background:transparent;border:none;color:#475569;font-size:14px;cursor:pointer;padding:0 4px";
+        delBtn.onclick=e=>{
+          e.stopPropagation();
+          const pts=getPaymentTypes().filter(x=>x.id!==pt.id);
+          if(pts.length===0){notify("Impossible de supprimer le dernier type","err");return;}
+          // Confirmation
+          const cf=div("");cf.style.cssText="background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:8px;margin-top:4px";
+          cf.onclick=e=>e.stopPropagation();
+          cf.innerHTML=`<p style="color:#fca5a5;font-size:12px;font-weight:700;margin-bottom:6px">Supprimer "${pt.label}" ?</p>`;
+          const cfRow=div("");cfRow.style.cssText="display:flex;gap:6px";
+          const oui=el("button",{type:"button"});oui.textContent="✓ Oui";
+          oui.style.cssText="flex:1;background:#EF4444;border:none;color:#fff;border-radius:6px;padding:6px;font-weight:700;font-size:12px;cursor:pointer";
+          oui.onclick=e=>{e.stopPropagation();savePaymentTypes(pts);persist(STATE.months);renderPTList();};
+          const non=el("button",{type:"button"});non.textContent="Annuler";
+          non.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:6px;padding:6px;font-weight:700;font-size:12px;cursor:pointer";
+          non.onclick=e=>{e.stopPropagation();cf.remove();};
+          cfRow.append(oui,non);cf.appendChild(cfRow);
+          card.appendChild(cf);
+        };
+        hdr.append(dot,lbl,delBtn);card.appendChild(hdr);
+
+        // Champ renommer
+        const renRow=div("");renRow.style.cssText="display:flex;gap:6px;margin-bottom:8px";
+        const renInp=el("input",{type:"text",value:pt.label,placeholder:"Nom…"});
+        renInp.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:5px 8px;color:#f1f5f9;font-size:12px";
+        renInp.onclick=e=>e.stopPropagation();
+        renInp.oninput=e=>e.stopPropagation();
+        const renBtn=el("button",{type:"button"});renBtn.textContent="Renommer";
+        renBtn.style.cssText="background:#334155;border:none;color:#cbd5e1;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer";
+        renBtn.onclick=e=>{
+          e.stopPropagation();
+          const newLabel=renInp.value.trim();
+          if(!newLabel||newLabel===pt.label)return;
+          const pts=getPaymentTypes().map(x=>x.id===pt.id?{...x,label:newLabel}:x);
+          savePaymentTypes(pts);persist(STATE.months);renderPTList();
+          notify("✓ Renommé !");
+        };
+        renRow.append(renInp,renBtn);card.appendChild(renRow);
+
+        // Palette couleurs toujours visible
+        const palLbl=el("p",{style:"color:#64748b;font-size:10px;font-weight:700;margin-bottom:4px"});palLbl.textContent="COULEUR";
+        card.appendChild(palLbl);
+        const pal=div("");pal.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
+        PALETTE.forEach(col=>{
+          const cb=div("");
+          const isSelected=col===pt.color;
+          cb.style.cssText=`width:24px;height:24px;border-radius:50%;background:${col};cursor:pointer;border:3px solid ${isSelected?"#fff":"transparent"};box-shadow:${isSelected?"0 0 0 1px "+col:"none"};transition:all .15s`;
+          cb.onclick=e=>{
+            e.stopPropagation();
+            const pts=getPaymentTypes().map(x=>x.id===pt.id?{...x,color:col}:x);
+            savePaymentTypes(pts);persist(STATE.months);renderPTList();
+          };
+          pal.appendChild(cb);
+        });
+        card.appendChild(pal);
+        listWrap.appendChild(card);
+      });
+
+      // ── Ajouter un nouveau type ──
+      const addCard=div("");
+      addCard.style.cssText="border:2px dashed #334155;border-radius:10px;padding:10px;margin-top:4px";
+      addCard.onclick=e=>e.stopPropagation();
+      const addTitle=el("p",{style:"color:#64748b;font-size:12px;font-weight:700;margin-bottom:8px"});
+      addTitle.textContent="+ Nouveau type";
+      addCard.appendChild(addTitle);
+
+      const addInpRow=div("");addInpRow.style.cssText="display:flex;gap:6px;margin-bottom:8px";
+      const addInp=el("input",{type:"text",placeholder:"ex: PayPal, Virement…"});
+      addInp.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:7px 10px;color:#f1f5f9;font-size:13px";
+      addInp.onclick=e=>e.stopPropagation();addInp.oninput=e=>e.stopPropagation();
+      addInpRow.appendChild(addInp);addCard.appendChild(addInpRow);
+
+      // Palette pour le nouveau type
+      const newPalLbl=el("p",{style:"color:#64748b;font-size:10px;font-weight:700;margin-bottom:4px"});newPalLbl.textContent="COULEUR";
+      addCard.appendChild(newPalLbl);
+      let newColor=PALETTE[getPaymentTypes().length%PALETTE.length];
+      const newPal=div("");newPal.style.cssText="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px";
+      function renderNewPal(){
+        newPal.innerHTML="";
+        PALETTE.forEach(col=>{
+          const cb=div("");
+          const isSel=col===newColor;
+          cb.style.cssText=`width:24px;height:24px;border-radius:50%;background:${col};cursor:pointer;border:3px solid ${isSel?"#fff":"transparent"};box-shadow:${isSel?"0 0 0 1px "+col:"none"}`;
+          cb.onclick=e=>{e.stopPropagation();newColor=col;renderNewPal();};
+          newPal.appendChild(cb);
+        });
+      }
+      renderNewPal();
+      addCard.appendChild(newPal);
+
+      const addBtn=el("button",{type:"button"});addBtn.textContent="Ajouter";
+      addBtn.style.cssText="width:100%;background:#3B82F6;border:none;color:#fff;border-radius:8px;padding:8px;font-weight:700;font-size:13px;cursor:pointer";
+      addBtn.onclick=e=>{
+        e.stopPropagation();
+        const label=addInp.value.trim();
+        if(!label)return;
+        const id=label.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
+        const pts=getPaymentTypes();
+        if(pts.find(x=>x.id===id)){notify("Ce type existe déjà","err");return;}
+        savePaymentTypes([...pts,{id,label,color:newColor}]);
+        persist(STATE.months);addInp.value="";renderPTList();
+        notify("✓ Type ajouté !");
+      };
+      addCard.appendChild(addBtn);
+      listWrap.appendChild(addCard);
+    }
+
+    renderPTList();
+    m.appendChild(listWrap);
+    const fermer=el("button",{className:"b-can"});fermer.style.cssText="margin-top:12px";fermer.textContent="Fermer";
+    fermer.onclick=()=>{
+      if(modal.prevModal)setState({modal:modal.prevModal});
+      else setState({modal:null});
+    };
+    m.appendChild(fermer);
+  }
+
   else if(modal.type==="newMonth"){
     const now=new Date();let year=now.getFullYear(),month=now.getMonth()+1,copy="";
     m.appendChild(el("h2",{className:"mt"},"Nouveau mois"));
