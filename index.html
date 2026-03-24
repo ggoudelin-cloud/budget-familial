@@ -1171,21 +1171,24 @@ function renderApp(){
     const pk=div("picker");pk.onclick=e=>e.stopPropagation();
     pk.style.cssText="background:#1e293b;border-radius:12px;padding:14px;width:300px;box-shadow:0 8px 24px rgba(0,0,0,.6)";
 
-    // Grouper par année
-    const byYear={};
-    allKeys.forEach(k=>{const[y]=k.split("-");if(!byYear[y])byYear[y]=[];byYear[y].push(k);});
-    const years=Object.keys(byYear).sort();
+    // MOIS_COURT défini une seule fois
     const MOIS_COURT=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
 
-    // Année affichée = année du mois courant, ou la plus récente si plusieurs années
+    // Année initiale = année du mois courant
     let displayYear=curKey.split("-")[0];
-    // Si le mois courant n'existe pas dans byYear, prendre la plus récente
-    if(!byYear[displayYear])displayYear=years[years.length-1];
 
     function renderYearGrid(){
       pk.innerHTML="";
-      // Recalculer years à chaque render pour être sûr qu'il est à jour
+
+      // Recalculer byYear depuis STATE.months à chaque render (pour capturer les nouveaux mois)
+      const byYear={};
+      Object.keys(STATE.months).forEach(k=>{
+        const[y]=k.split("-");
+        if(!byYear[y])byYear[y]=[];
+        byYear[y].push(k);
+      });
       const currentYears=Object.keys(byYear).sort();
+      if(!byYear[displayYear])displayYear=currentYears[currentYears.length-1];
 
       // ── Navigation année ──
       const nav=div("");nav.style.cssText="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px";
