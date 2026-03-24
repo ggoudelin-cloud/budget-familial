@@ -631,18 +631,32 @@ const DB={
       // Utiliser un fetch avec timeout pour détecter l'absence de réseau
       const controller=new AbortController();
       const timeout=setTimeout(()=>controller.abort(),8000);
-      const r=await fetch(GAS_URL,{
+      await fetch(GAS_URL,{
         method:"POST",
         mode:"no-cors",
         body:jsonStr,
         signal:controller.signal
       });
       clearTimeout(timeout);
-      console.log("[DB._send] ✅ Envoi GAS réussi");
-      setPending(null); // succès — effacer la queue
+      // Avec no-cors, pas d'exception = envoi réseau OK
+      console.log("[DB._send] ✅ Envoi GAS réussi (fetch no-cors)");
+      setPending(null);
     }catch(e){
-      console.warn("[DB._send] ❌ Échec envoi:", e.message);
-      // Garder dans la queue — retry dans 10s
+      console.warn("[DB._send] ❌ Fetch échoué:", e.message, "— tentative sendBeacon...");
+      // Fallback : sendBeacon est plus fiable pour les envois en background
+      try{
+        const ok=navigator.sendBeacon(GAS_URL, jsonStr);
+        if(ok){
+          console.log("[DB._send] ✅ sendBeacon réussi");
+          setPending(null);
+          return;
+        }
+        console.warn("[DB._send] ⚠️ sendBeacon retourné false");
+      }catch(e2){
+        console.warn("[DB._send] ❌ sendBeacon échoué:", e2.message);
+      }
+      // Retry dans 10s
+      console.log("[DB._send] 🔄 Retry dans 10s...");
       setTimeout(()=>{
         if(_pendingSave&&navigator.onLine) DB._send(_pendingSave);
       },10000);
@@ -860,19 +874,8 @@ async function createMonth(key,copyKey){
   const nm=makeMonth(src?.depenses,src,key);
   const next={...STATE.months,[key]:nm};
 
-  // 1) Sauvegarder localement EN PREMIER — avant tout render
+  // 1) Mettre à jour STATE et afficher immédiatement
   STATE.months=next;
-  try{localStorage.setItem("bf-local-json",JSON.stringify({
-    ...next,
-    _meta:{
-      commerces:getCommerces(),cats:getCats(),catColors:getCatCustomColors(),
-      livretA:STATE._livretA&&typeof STATE._livretA==="object"?STATE._livretA:{solde:0,transactions:[]},
-      livretCats:getLivretCats(),paymentTypes:getPaymentTypes(),
-      savedAt:Date.now()
-    }
-  }));}catch{}
-
-  // 2) Mettre à jour STATE et afficher
   STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;
   STATE.lastSync=new Date();
   STATE.toast={msg:"✓ Mois créé !",err:false};
@@ -880,8 +883,9 @@ async function createMonth(key,copyKey){
   STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
   render();
 
-  // 3) Envoyer vers GAS
+  // 2) DB.save gère tout : localStorage + pending + envoi GAS
   await DB.save(next);
+  console.log("[createMonth] ✅ Mois créé et sauvegardé :", key);
 }
 
 // PIN logic
