@@ -622,39 +622,30 @@ const DB={
 
   async _send(data){
     const jsonStr=JSON.stringify(data);
-    if(!navigator.onLine){console.log("[DB._send] Hors ligne — envoi annulé");return;}
-
-    // 1) sendBeacon — le plus fiable avec GAS (pas de restriction CORS, body reçu correctement)
-    try{
-      const blob=new Blob([jsonStr],{type:"text/plain"});
-      const ok=navigator.sendBeacon(GAS_URL,blob);
-      if(ok){
-        console.log("[DB._send] ✅ sendBeacon réussi");
-        setPending(null);
-        return;
-      }
-      console.warn("[DB._send] ⚠️ sendBeacon retourné false, fallback fetch...");
-    }catch(e){
-      console.warn("[DB._send] ⚠️ sendBeacon échoué:",e.message,", fallback fetch...");
+    // Vérifier la connectivité réseau avant d'envoyer
+    if(!navigator.onLine){
+      console.log("[DB._send] Hors ligne — envoi annulé");
+      return;
     }
-
-    // 2) Fallback fetch no-cors
     try{
+      // Utiliser un fetch avec timeout pour détecter l'absence de réseau
       const controller=new AbortController();
       const timeout=setTimeout(()=>controller.abort(),8000);
-      await fetch(GAS_URL,{
+      const r=await fetch(GAS_URL,{
         method:"POST",
         mode:"no-cors",
         body:jsonStr,
         signal:controller.signal
       });
       clearTimeout(timeout);
-      console.log("[DB._send] ✅ Envoi GAS réussi (fetch fallback)");
-      setPending(null);
+      console.log("[DB._send] ✅ Envoi GAS réussi");
+      setPending(null); // succès — effacer la queue
     }catch(e){
-      console.warn("[DB._send] ❌ Échec total envoi:", e.message);
-      // Retry dans 10s
-      setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},10000);
+      console.warn("[DB._send] ❌ Échec envoi:", e.message);
+      // Garder dans la queue — retry dans 10s
+      setTimeout(()=>{
+        if(_pendingSave&&navigator.onLine) DB._send(_pendingSave);
+      },10000);
     }
   },
 
@@ -789,14 +780,6 @@ async function init(){
     const d=await DB.load();
     if(d&&Object.keys(d).length>0){
       Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});
-      // Fusionner les mois présents localement mais absents du résultat chargé
-      // (évite de perdre un mois créé localement si GAS n'a pas encore reçu l'envoi)
-      Object.keys(STATE.months).forEach(k=>{
-        if(!d[k]){
-          console.log("[sync] Mois local conservé (pas encore sur GAS):", k);
-          d[k]=STATE.months[k];
-        }
-      });
       // Cochage automatique des prélèvements passés
       const autoCoched=autoCocherPrelevements(d);
       const activeTag=document.activeElement&&document.activeElement.tagName;
@@ -877,8 +860,19 @@ async function createMonth(key,copyKey){
   const nm=makeMonth(src?.depenses,src,key);
   const next={...STATE.months,[key]:nm};
 
-  // 1) Mettre à jour STATE et afficher immédiatement
+  // 1) Sauvegarder localement EN PREMIER — avant tout render
   STATE.months=next;
+  try{localStorage.setItem("bf-local-json",JSON.stringify({
+    ...next,
+    _meta:{
+      commerces:getCommerces(),cats:getCats(),catColors:getCatCustomColors(),
+      livretA:STATE._livretA&&typeof STATE._livretA==="object"?STATE._livretA:{solde:0,transactions:[]},
+      livretCats:getLivretCats(),paymentTypes:getPaymentTypes(),
+      savedAt:Date.now()
+    }
+  }));}catch{}
+
+  // 2) Mettre à jour STATE et afficher
   STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;
   STATE.lastSync=new Date();
   STATE.toast={msg:"✓ Mois créé !",err:false};
@@ -886,9 +880,8 @@ async function createMonth(key,copyKey){
   STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
   render();
 
-  // 2) DB.save gère tout : localStorage + pending + envoi GAS
+  // 3) Envoyer vers GAS
   await DB.save(next);
-  console.log("[createMonth] ✅ Mois créé et envoyé :", key);
 }
 
 // PIN logic
