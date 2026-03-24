@@ -511,42 +511,67 @@ function loadPending(){
 const DB={
   async load(){
     console.log("[DB.load] Début chargement...");
-    // 1) Google Sheets en priorité — source de vérité partagée
+
+    // Charger les données locales d'abord (toujours disponibles)
+    let localData=null;
+    let localSavedAt=0;
+    try{
+      const v=localStorage.getItem("bf-local-json");
+      if(v){
+        const p=JSON.parse(v);
+        const d=extractAndRestore(JSON.parse(JSON.stringify(p))); // copie pour ne pas modifier p
+        if(d&&Object.keys(d).length>0){
+          localData=d;
+          localSavedAt=p._meta?.savedAt||0;
+        }
+      }
+    }catch{}
+
+    // Charger depuis GAS
+    let gasData=null;
+    let gasSavedAt=0;
     try{
       const r=await fetch(GAS_URL,{redirect:"follow"});
       const t=await r.text();
-      console.log("[DB.load] GAS répond, taille:", t.length, "chars, début:", t.substring(0,50));
+      console.log("[DB.load] GAS répond, taille:", t.length, "chars");
       if(t&&t.trim().length>2){
-        // Tenter déchiffrement (ancien format)
-        try{
-          const dec=await decryptData(t);
-          if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
-            const raw=dec.data&&dec.ts?dec.data:dec;
-            const d=extractAndRestore(raw);
-            if(d&&Object.keys(d).length>0){
-              console.log("[DB.load] ✅ Données GAS chiffrées OK, mois:", Object.keys(d).join(','));
-              try{const enc=await encryptData(raw);localStorage.setItem("bf-local",enc);}catch{}
-              try{localStorage.setItem("bf-local-json",JSON.stringify(raw));}catch{}
-              return d;
-            }
-          }
-        }catch{}
-        // JSON brut
         try{
           const p=JSON.parse(t);
           if(p&&typeof p==="object"&&!Array.isArray(p)&&Object.keys(p).length>0){
-            const d=extractAndRestore(p);
-            if(d){
-              console.log("[DB.load] ✅ Données GAS JSON brut OK, mois:", Object.keys(d).join(','));
-              try{const enc=await encryptData(p);localStorage.setItem("bf-local",enc);}catch{}
-              try{localStorage.setItem("bf-local-json",JSON.stringify(p));}catch{}
-              return d;
-            }
+            const d=extractAndRestore(JSON.parse(JSON.stringify(p)));
+            if(d){gasData=d;gasSavedAt=p._meta?.savedAt||0;}
           }
         }catch{}
       }
-    }catch(err){console.warn("[DB.load] ⚠️ GAS échoué:", err.message, "fallback localStorage...");}
-    // 2) Fallback localStorage chiffré
+    }catch(err){console.warn("[DB.load] ⚠️ GAS échoué:", err.message);}
+
+    // Fusionner : prendre le plus récent comme base, puis ajouter les mois manquants de l'autre
+    if(gasData&&localData){
+      let base, other;
+      if(localSavedAt>=gasSavedAt){
+        // Local plus récent → base locale
+        base=localData; other=gasData;
+        console.log("[DB.load] ✅ Local plus récent ("+localSavedAt+" >= "+gasSavedAt+")");
+      } else {
+        // GAS plus récent → base GAS
+        base=gasData; other=localData;
+        console.log("[DB.load] ✅ GAS plus récent ("+gasSavedAt+" > "+localSavedAt+")");
+      }
+      // Ajouter les mois présents dans other mais absents de base
+      Object.keys(other).forEach(k=>{
+        if(!base[k]){
+          console.log("[DB.load] Mois manquant ajouté depuis autre source:", k);
+          base[k]=other[k];
+        }
+      });
+      return base;
+    }
+
+    // Un seul disponible
+    if(localData){console.log("[DB.load] ✅ Local uniquement");return localData;}
+    if(gasData){console.log("[DB.load] ✅ GAS uniquement");return gasData;}
+
+    // Fallback localStorage chiffré
     try{
       const v=localStorage.getItem("bf-local");
       if(v){
@@ -555,18 +580,12 @@ const DB={
           if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
             const raw=dec.data&&dec.ts?dec.data:dec;
             const d=extractAndRestore(raw);
-            if(d&&Object.keys(d).length>0)return d;
+            if(d&&Object.keys(d).length>0){console.log("[DB.load] ✅ localStorage chiffré OK");return d;}
           }
         }catch{}
-        try{const p=JSON.parse(v);const d=extractAndRestore(p);if(d&&Object.keys(d).length>0)return d;}catch{}
       }
     }catch{}
-    console.log("[DB.load] ⚠️ localStorage chiffré échoué, fallback JSON sync...");
-    // 3) Dernier recours : JSON synchrone
-    try{
-      const v=localStorage.getItem("bf-local-json");
-      if(v){const p=JSON.parse(v);const d=extractAndRestore(p);if(d&&Object.keys(d).length>0)return d;}
-    }catch{}
+
     return null;
   },
 
