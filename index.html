@@ -1597,7 +1597,7 @@ function renderDepenses(data){
       const jBadge=el("span",{className:"pill"});
       jBadge.style.cssText=`background:${isToday?"#10B98133":"#1e3a5f"};color:${isToday?"#10B981":"#64748b"};border:1px solid ${isToday?"#10B981":"#334155"};margin-left:4px;font-size:10px`;
       jBadge.textContent=`📅 ${d.jourPrelevement}`;
-      jBadge.title=`Prélèvement automatique le ${d.jourPrelevement} du mois`;
+      jBadge.title=`Paiement automatique le ${d.jourPrelevement} du mois`;
       info.appendChild(jBadge);
     }
     const mnt=el("span",{style:`color:${d.paye?"#64748b":"#f1f5f9"};font-weight:700;font-size:14px;margin-right:8px`});mnt.textContent=fmt(d.montant);
@@ -2402,7 +2402,7 @@ function renderModal(modal,data,months,allKeys){
       const jourWrap=div("");jourWrap.style.cssText="margin-top:12px";
       jourWrap.onclick=e=>e.stopPropagation();
       const jourLabel=el("label",{style:"display:block;margin-bottom:6px"});
-      jourLabel.textContent="Jour de prélèvement automatique (optionnel)";
+      jourLabel.textContent="Jour de paiement automatique (optionnel)";
       jourWrap.appendChild(jourLabel);
       const jourRow=div("");jourRow.style.cssText="display:flex;align-items:center;gap:8px";
       const jourInp=el("input",{type:"number",min:"1",max:"31",placeholder:"ex: 5",value:item.jourPrelevement||""});
@@ -2795,12 +2795,11 @@ function renderModal(modal,data,months,allKeys){
   else if(modal.type==="newMonth"){
     const now=new Date();let year=now.getFullYear(),month=now.getMonth()+1,copy="";
     m.appendChild(el("h2",{className:"mt"},"Nouveau mois"));
-    // Années dynamiques : année courante jusqu'à année courante + 3
     const yearOptions=Array.from({length:4},(_,i)=>String(now.getFullYear()+i));
     m.appendChild(el("label",{},"Année"));m.appendChild(sel(String(year),yearOptions,v=>{year=+v;}));
     m.appendChild(el("label",{},"Mois"));
     const ms=el("select",{});ms.style.cssText="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:15px;margin-top:4px";
-    MOIS.forEach((nm,i)=>{const o=el("option",{value:String(i+1)});o.textContent=nm;if(i+1===month)o.selected=true;ms.appendChild(o);});
+    MOIS.forEach((moisNom,i)=>{const o=el("option",{value:String(i+1)});o.textContent=moisNom;if(i+1===month)o.selected=true;ms.appendChild(o);});
     ms.onchange=e=>{month=+e.target.value;};m.appendChild(ms);
     m.appendChild(el("label",{},"Copier depuis"));
     const so=["— Modèle de base —",...allKeys.map(k=>keyLabel(k))];
