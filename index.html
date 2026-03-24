@@ -1177,12 +1177,15 @@ function renderApp(){
     const years=Object.keys(byYear).sort();
     const MOIS_COURT=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
 
-    // Année affichée = année du mois courant
+    // Année affichée = année du mois courant, ou la plus récente si plusieurs années
     let displayYear=curKey.split("-")[0];
+    // Si le mois courant n'existe pas dans byYear, prendre la plus récente
     if(!byYear[displayYear])displayYear=years[years.length-1];
 
     function renderYearGrid(){
       pk.innerHTML="";
+      // Recalculer years à chaque render pour être sûr qu'il est à jour
+      const currentYears=Object.keys(byYear).sort();
 
       // ── Navigation année ──
       const nav=div("");nav.style.cssText="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px";
@@ -1193,12 +1196,12 @@ function renderApp(){
       const nextBtn=el("button",{type:"button"});nextBtn.textContent="❯";
       nextBtn.style.cssText="background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:8px;padding:4px 10px;font-size:16px;cursor:pointer";
 
-      const prevIdx=years.indexOf(displayYear)-1;
-      const nextIdx=years.indexOf(displayYear)+1;
+      const prevIdx=currentYears.indexOf(displayYear)-1;
+      const nextIdx=currentYears.indexOf(displayYear)+1;
       prevBtn.disabled=prevIdx<0;prevBtn.style.opacity=prevIdx<0?"0.3":"1";
-      nextBtn.disabled=nextIdx>=years.length;nextBtn.style.opacity=nextIdx>=years.length?"0.3":"1";
-      prevBtn.onclick=e=>{e.stopPropagation();if(prevIdx>=0){displayYear=years[prevIdx];renderYearGrid();}};
-      nextBtn.onclick=e=>{e.stopPropagation();if(nextIdx<years.length){displayYear=years[nextIdx];renderYearGrid();}};
+      nextBtn.disabled=nextIdx>=currentYears.length;nextBtn.style.opacity=nextIdx>=currentYears.length?"0.3":"1";
+      prevBtn.onclick=e=>{e.stopPropagation();if(prevIdx>=0){displayYear=currentYears[prevIdx];renderYearGrid();}};
+      nextBtn.onclick=e=>{e.stopPropagation();if(nextIdx<currentYears.length){displayYear=currentYears[nextIdx];renderYearGrid();}};
 
       nav.append(prevBtn,yearLbl,nextBtn);pk.appendChild(nav);
 
