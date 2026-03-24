@@ -838,15 +838,31 @@ async function createMonth(key,copyKey){
     STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;render();return;
   }
   const src=copyKey&&STATE.months[copyKey]?STATE.months[copyKey]:null;
-  const nm=makeMonth(src?.depenses,src,key); // key = mois cible pour filtrer dateFin
+  const nm=makeMonth(src?.depenses,src,key);
   const next={...STATE.months,[key]:nm};
-  STATE.months=next;STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;
+
+  // 1) Sauvegarder localement EN PREMIER — avant tout render
+  STATE.months=next;
+  try{localStorage.setItem("bf-local-json",JSON.stringify({
+    ...next,
+    _meta:{
+      commerces:getCommerces(),cats:getCats(),catColors:getCatCustomColors(),
+      livretA:STATE._livretA&&typeof STATE._livretA==="object"?STATE._livretA:{solde:0,transactions:[]},
+      livretCats:getLivretCats(),paymentTypes:getPaymentTypes(),
+      savedAt:Date.now()
+    }
+  }));}catch{}
+
+  // 2) Mettre à jour STATE et afficher
+  STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;
   STATE.lastSync=new Date();
   STATE.toast={msg:"✓ Mois créé !",err:false};
   clearTimeout(STATE.toastTimer);
   STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
   render();
-  await DB.save(next); // Envoi GAS attendu
+
+  // 3) Envoyer vers GAS
+  await DB.save(next);
 }
 
 // PIN logic
