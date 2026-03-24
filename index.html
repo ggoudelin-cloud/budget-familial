@@ -1269,57 +1269,60 @@ function renderApp(){
           }
           btn.onclick=()=>setState({curKey:key,monthPick:false});
           // Appui long → suppression
+          // Fonction de suppression commune (mobile appui long + PC clic droit)
+          const showDelConfirm=()=>{
+            if(allKeys.length<=1){notify("Impossible de supprimer le seul mois","err");return;}
+            if(key===nowKey()){notify("Impossible de supprimer le mois en cours","err");return;}
+            pk.querySelectorAll(".del-month-confirm").forEach(x=>x.remove());
+            const cf=div("del-month-confirm");
+            cf.style.cssText="background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:10px;margin-top:10px";
+            cf.onclick=e=>e.stopPropagation();
+            const msg=el("p",{style:"color:#fca5a5;font-size:12px;margin-bottom:8px;font-weight:600"});
+            msg.textContent=`Supprimer ${keyLabel(key)} ?`;
+            const cfBtns=div("");cfBtns.style.cssText="display:flex;gap:8px";
+            const yes=el("button",{type:"button"});yes.textContent="✓ Oui";
+            yes.style.cssText="flex:1;background:#EF4444;border:none;color:#fff;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
+            yes.onclick=e=>{
+              e.stopPropagation();
+              const next={...STATE.months};
+              const txASupprimer=(STATE.months[key].livretA||[]);
+              if(txASupprimer.length>0){
+                const autresKeys=Object.keys(next).filter(k=>k!==key).sort();
+                const cible=autresKeys.find(k=>k>key)||autresKeys[autresKeys.length-1];
+                if(cible) next[cible]={...next[cible],livretA:[...(next[cible].livretA||[]),...txASupprimer]};
+              }
+              delete next[key];
+              const today=nowKey();
+              let newCurKey;
+              if(key===curKey){
+                newCurKey=next[today]?today:(Object.keys(next).sort().reverse()[0]||today);
+              } else if(key>today){
+                newCurKey=next[today]?today:curKey;
+              } else {
+                newCurKey=curKey;
+              }
+              STATE.months=next;STATE.curKey=newCurKey;STATE.monthPick=false;
+              persist(next);notify("✓ Mois supprimé");
+            };
+            const no=el("button",{type:"button"});no.textContent="Annuler";
+            no.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
+            no.onclick=e=>{e.stopPropagation();cf.remove();};
+            cfBtns.append(yes,no);cf.append(msg,cfBtns);
+            pk.appendChild(cf);
+          };
+
+          // Mobile : appui long
           let holdTimer=null;
           btn.addEventListener("touchstart",e=>{
-            holdTimer=setTimeout(()=>{
-              e.stopPropagation();
-              if(allKeys.length<=1){notify("Impossible de supprimer le seul mois","err");return;}
-              // Bloquer la suppression du mois calendaire actuel
-              if(key===nowKey()){notify("Impossible de supprimer le mois en cours","err");return;}
-              pk.querySelectorAll(".del-month-confirm").forEach(x=>x.remove());
-              const cf=div("del-month-confirm");
-              cf.style.cssText="background:#1e293b;border:1px solid #EF4444;border-radius:8px;padding:10px;margin-top:10px";
-              cf.onclick=e=>e.stopPropagation();
-              const msg=el("p",{style:"color:#fca5a5;font-size:12px;margin-bottom:8px;font-weight:600"});
-              msg.textContent=`Supprimer ${keyLabel(key)} ?`;
-              const cfBtns=div("");cfBtns.style.cssText="display:flex;gap:8px";
-              const yes=el("button",{type:"button"});yes.textContent="✓ Oui";
-              yes.style.cssText="flex:1;background:#EF4444;border:none;color:#fff;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
-              yes.onclick=e=>{
-                e.stopPropagation();
-                const next={...STATE.months};
-                // Préserver les transactions Livret A
-                const txASupprimer=(STATE.months[key].livretA||[]);
-                if(txASupprimer.length>0){
-                  const autresKeys=Object.keys(next).filter(k=>k!==key).sort();
-                  const cible=autresKeys.find(k=>k>key)||autresKeys[autresKeys.length-1];
-                  if(cible) next[cible]={...next[cible],livretA:[...(next[cible].livretA||[]),...txASupprimer]};
-                }
-                delete next[key];
-                // Si on supprime un mois futur → revenir au mois courant (ou le plus récent disponible)
-                const today=nowKey();
-                let newCurKey;
-                if(key===curKey){
-                  // On supprimait le mois affiché
-                  newCurKey=next[today]?today:(Object.keys(next).sort().reverse()[0]||today);
-                } else if(key>today){
-                  // Mois futur supprimé → rester sur le mois courant si disponible
-                  newCurKey=next[today]?today:curKey;
-                } else {
-                  newCurKey=curKey;
-                }
-                STATE.months=next;STATE.curKey=newCurKey;STATE.monthPick=false;
-                persist(next);notify("✓ Mois supprimé");
-              };
-              const no=el("button",{type:"button"});no.textContent="Annuler";
-              no.style.cssText="flex:1;background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:7px;font-weight:700;font-size:13px;cursor:pointer";
-              no.onclick=e=>{e.stopPropagation();cf.remove();};
-              cfBtns.append(yes,no);cf.append(msg,cfBtns);
-              pk.appendChild(cf);
-            },600);
+            holdTimer=setTimeout(()=>{e.stopPropagation();showDelConfirm();},600);
           });
           btn.addEventListener("touchend",e=>{clearTimeout(holdTimer);});
           btn.addEventListener("touchmove",e=>{clearTimeout(holdTimer);});
+
+          // PC : clic droit
+          btn.addEventListener("contextmenu",e=>{
+            e.preventDefault();e.stopPropagation();showDelConfirm();
+          });
         }
         grid.appendChild(btn);
       }
@@ -1327,7 +1330,7 @@ function renderApp(){
 
       // Hint suppression
       const hint=el("p",{});hint.style.cssText="color:#334155;font-size:10px;text-align:center;margin-top:10px";
-      hint.textContent="Appui long sur un mois pour le supprimer";
+      hint.textContent="Clic droit (PC) ou appui long (mobile) pour supprimer";
       pk.appendChild(hint);
     }
 
