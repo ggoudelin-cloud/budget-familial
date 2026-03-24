@@ -2565,9 +2565,8 @@ function renderModal(modal,data,months,allKeys){
             next[k]={...m,depenses:m.depenses.map(d=>{
               if(d.id===u.id) return u; // mois courant — id exact
               if(d.type===modal.item.type){
-                const isCurMonth=k===STATE.curKey;
                 return{...d,type:u.type,
-                  montant:isCurMonth?u.montant:d.montant, // montant = inchangé sur autres mois
+                  montant:u.montant, // montant propagé sur tous les mois
                   categorie:u.categorie,
                   dateFin:u.dateFin||"",
                   paymentType:u.paymentType||"",
@@ -2598,11 +2597,10 @@ function renderModal(modal,data,months,allKeys){
         Object.keys(STATE.months).forEach(k=>{
           const m=STATE.months[k];
           next[k]={...m,depenses:m.depenses.map(d=>{
-            if(d.id===u.id) return u; // mois courant — id exact
+            if(d.id===u.id) return u;
             if(d.type===modal.item.type){
-              const isCurMonth=k===STATE.curKey;
               return{...d,type:u.type,
-                montant:isCurMonth?u.montant:d.montant, // montant = inchangé sur autres mois
+                montant:u.montant,
                 categorie:u.categorie,
                 dateFin:u.dateFin||"",
                 paymentType:u.paymentType||"",
