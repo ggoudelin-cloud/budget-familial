@@ -1199,12 +1199,16 @@ function renderApp(){
       const nextBtn=el("button",{type:"button"});nextBtn.textContent="❯";
       nextBtn.style.cssText="background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:8px;padding:4px 10px;font-size:16px;cursor:pointer";
 
-      const prevIdx=currentYears.indexOf(displayYear)-1;
-      const nextIdx=currentYears.indexOf(displayYear)+1;
+      // Fonction pour obtenir les années disponibles en temps réel
+      const getYears=()=>Object.keys(STATE.months.constructor===Object?STATE.months:{}).reduce((acc,k)=>{const[y]=k.split("-");acc[y]=true;return acc;},{});
+      const sortedYrs=()=>Object.keys(getYears()).sort();
+
+      const prevIdx=sortedYrs().indexOf(displayYear)-1;
+      const nextIdx=sortedYrs().indexOf(displayYear)+1;
       prevBtn.disabled=prevIdx<0;prevBtn.style.opacity=prevIdx<0?"0.3":"1";
-      nextBtn.disabled=nextIdx>=currentYears.length;nextBtn.style.opacity=nextIdx>=currentYears.length?"0.3":"1";
-      prevBtn.onclick=e=>{e.stopPropagation();if(prevIdx>=0){displayYear=currentYears[prevIdx];renderYearGrid();}};
-      nextBtn.onclick=e=>{e.stopPropagation();if(nextIdx<currentYears.length){displayYear=currentYears[nextIdx];renderYearGrid();}};
+      nextBtn.disabled=nextIdx>=sortedYrs().length;nextBtn.style.opacity=nextIdx>=sortedYrs().length?"0.3":"1";
+      prevBtn.onclick=e=>{e.stopPropagation();const idx=sortedYrs().indexOf(displayYear)-1;if(idx>=0){displayYear=sortedYrs()[idx];renderYearGrid();}};
+      nextBtn.onclick=e=>{e.stopPropagation();const s=sortedYrs();const idx=s.indexOf(displayYear)+1;if(idx<s.length){displayYear=s[idx];renderYearGrid();}};
 
       nav.append(prevBtn,yearLbl,nextBtn);pk.appendChild(nav);
 
