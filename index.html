@@ -508,80 +508,81 @@ function loadPending(){
   return null;
 }
 
-const DB={
-  async load(){
-    console.log("[DB.load] Début chargement...");
-
-    // Charger les données locales d'abord (toujours disponibles)
-    let localData=null;
-    let localSavedAt=0;
-    try{
-      const v=localStorage.getItem("bf-local-json");
-      if(v){
-        const p=JSON.parse(v);
-        const d=extractAndRestore(JSON.parse(JSON.stringify(p))); // copie pour ne pas modifier p
-        if(d&&Object.keys(d).length>0){
-          localData=d;
-          localSavedAt=p._meta?.savedAt||0;
-        }
+const DB = {
+  async load() {
+    console.log("[DB.load] Début du chargement...");
+    let localData = null, localSavedAt = 0;
+    try {
+      const v = localStorage.getItem("bf-local-json");
+      if (v) {
+        const p = JSON.parse(v);
+        // On utilise ta fonction de restauration d'origine
+        const d = extractAndRestore(JSON.parse(JSON.stringify(p)));
+        if (d) { localData = d; localSavedAt = p._meta?.savedAt || 0; }
       }
-    }catch{}
+    } catch (e) { console.warn("Erreur lecture local:", e); }
 
-    // Charger depuis GAS
-    let gasData=null;
-    let gasSavedAt=0;
-    try{
-      const r=await fetch(GAS_URL,{redirect:"follow"});
-      const t=await r.text();
-      console.log("[DB.load] GAS répond, taille:", t.length, "chars");
-      if(t&&t.trim().length>2){
-        try{
-          const p=JSON.parse(t);
-          if(p&&typeof p==="object"&&!Array.isArray(p)&&Object.keys(p).length>0){
-            const d=extractAndRestore(JSON.parse(JSON.stringify(p)));
-            if(d){gasData=d;gasSavedAt=p._meta?.savedAt||0;}
-          }
-        }catch{}
+    let gasData = null, gasSavedAt = 0;
+    try {
+      const r = await fetch(GAS_URL, { redirect: "follow" });
+      const t = await r.text();
+      if (t && t.trim().length > 2) {
+        const p = JSON.parse(t);
+        const d = extractAndRestore(JSON.parse(JSON.stringify(p)));
+        if (d) { gasData = d; gasSavedAt = p._meta?.savedAt || 0; }
       }
-    }catch(err){console.warn("[DB.load] ⚠️ GAS échoué:", err.message);}
+    } catch (err) { console.warn("GAS inaccessible, mode hors-ligne"); }
 
-    // Fusionner : prendre le plus récent comme base, puis ajouter les mois manquants de l'autre
-    if(gasData&&localData){
-      let base, other;
-      if(localSavedAt>=gasSavedAt){
-        // Local plus récent → base locale
-        base=localData; other=gasData;
-        console.log("[DB.load] ✅ Local plus récent ("+localSavedAt+" >= "+gasSavedAt+")");
-      } else {
-        // GAS plus récent → base GAS
-        base=gasData; other=localData;
-        console.log("[DB.load] ✅ GAS plus récent ("+gasSavedAt+" > "+localSavedAt+")");
-      }
-      // Ajouter les mois présents dans other mais absents de base
-      Object.keys(other).forEach(k=>{
-        if(!base[k]){
-          console.log("[DB.load] Mois manquant ajouté depuis autre source:", k);
-          base[k]=other[k];
-        }
-      });
+    // FUSION INTELLIGENTE : On compare les dates de sauvegarde
+    if (gasData && localData) {
+      const useLocal = localSavedAt >= gasSavedAt;
+      console.log(useLocal ? "[DB] Local plus récent" : "[DB] Google plus récent");
+      let base = useLocal ? localData : gasData;
+      let other = useLocal ? gasData : localData;
+      // On fusionne les mois pour ne rien perdre
+      Object.keys(other).forEach(k => { if (!base[k]) base[k] = other[k]; });
       return base;
     }
+    return localData || gasData || null;
+  },
 
-    // Un seul disponible
-    if(localData){console.log("[DB.load] ✅ Local uniquement");return localData;}
-    if(gasData){console.log("[DB.load] ✅ GAS uniquement");return gasData;}
+  async save(data) {
+    const payload = {
+      ...data,
+      _meta: {
+        commerces: getCommerces(),
+        cats: getCats(),
+        catColors: getCatCustomColors(),
+        livretA: STATE._livretA || { solde: 0, transactions: [] },
+        savedAt: Date.now() // Marqueur de temps pour la synchro
+      }
+    };
+    // 1. Sauvegarde locale immédiate (sécurité)
+    localStorage.setItem("bf-local-json", JSON.stringify(payload));
+    setPending(payload);
+    
+    // 2. Envoi vers Google Sheets
+    if (navigator.onLine) {
+      await this._send(payload);
+    } else {
+      console.warn("Hors ligne : Sauvegardé localement uniquement.");
+    }
+  },
 
-    // Fallback localStorage chiffré
-    try{
-      const v=localStorage.getItem("bf-local");
-      if(v){
-        try{
-          const dec=await decryptData(v);
-          if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
-            const raw=dec.data&&dec.ts?dec.data:dec;
-            const d=extractAndRestore(raw);
-            if(d&&Object.keys(d).length>0){console.log("[DB.load] ✅ localStorage chiffré OK");return d;}
-          }
+  async _send(data) {
+    try {
+      await fetch(GAS_URL, {
+        method: "POST",
+        mode: "no-cors",
+        body: JSON.stringify(data)
+      });
+      setPending(null);
+      console.log("[DB] Synchronisation réussie");
+    } catch (e) {
+      console.error("[DB] Échec envoi vers GAS");
+    }
+  }
+};          }
         }catch{}
       }
     }catch{}
