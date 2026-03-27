@@ -185,23 +185,10 @@ const _GAS={
   i:"Edu8sm7C5LzSUKcp",
   d:"tWs2OFmEgnUoispZ2gVHeBSp9CKBuFeD2YxqD7Y7rFXr3thY+ysKuaN0vHegHgQg/YRJRzE4s7/6XfmWHoVL5u6zA7+F/B61Ok/bohuHJCC6eWsXIuPKkKBnfCbOM6qlpdS7I2LB+Hs3y6/QUnn2slt3G1lFla/NjZX2HapGqVQ="
 };
-async function _getGasUrl(){
-  // Dériver la clé via PBKDF2 — aucune clé fixe dans le code
-  const km=await crypto.subtle.importKey(
-    "raw",new TextEncoder().encode("BudgetFamilialGAS2026"),
-    {name:"PBKDF2"},false,["deriveKey"]
-  );
-  const key=await crypto.subtle.deriveKey(
-    {name:"PBKDF2",salt:Uint8Array.from(atob(_GAS.s),c=>c.charCodeAt(0)),iterations:100000,hash:"SHA-256"},
-    km,{name:"AES-GCM",length:256},false,["decrypt"]
-  );
-  const dec=await crypto.subtle.decrypt(
-    {name:"AES-GCM",iv:Uint8Array.from(atob(_GAS.i),c=>c.charCodeAt(0))},
-    key,Uint8Array.from(atob(_GAS.d),c=>c.charCodeAt(0))
-  );
-  return new TextDecoder().decode(dec);
-}
-let GAS_URL=null; // sera rempli au démarrage
+// ── Supabase config ──────────────────────────────────────────────────────────
+const SUPABASE_URL="https://gvfejwdanvwfhtsunhsu.supabase.co";
+const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2ZmVqd2RhbnZ3Zmh0c3VuaHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MzE0MjksImV4cCI6MjA5MDIwNzQyOX0.1NS9hT8YNI7cYSrY2Fm2doaSiWIuIloJSvwfPqy6o3A";
+const SUPABASE_HEADERS={"apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Content-Type":"application/json"};
 const PIN_KEY="bf-pin",PIN_AUTH_KEY="bf-pin-auth",PIN_TRIES_KEY="bf-pin-tries",PIN_BLOCK_KEY="bf-pin-block";
 const AUTH_DURATION=30*60*1000,MAX_TRIES=3,BLOCK_DURATION=3*60*1000;
 const TOTAL_TRIES_KEY="bf-total-tries";
@@ -509,83 +496,55 @@ function loadPending(){
 }
 
 const DB={
+  // ── Supabase REST API ──────────────────────────────────────────────────────
   async load(){
-    console.log("[DB.load] Début chargement...");
+    console.log("[DB.load] Chargement depuis Supabase...");
 
-    // Charger les données locales d'abord (toujours disponibles)
+    // 1) Charger local d'abord
     let localData=null;
     let localSavedAt=0;
     try{
       const v=localStorage.getItem("bf-local-json");
       if(v){
         const p=JSON.parse(v);
-        const d=extractAndRestore(JSON.parse(JSON.stringify(p))); // copie pour ne pas modifier p
-        if(d&&Object.keys(d).length>0){
-          localData=d;
-          localSavedAt=p._meta?.savedAt||0;
-        }
+        const d=extractAndRestore(JSON.parse(JSON.stringify(p)));
+        if(d&&Object.keys(d).length>0){localData=d;localSavedAt=p._meta?.savedAt||0;}
       }
     }catch{}
 
-    // Charger depuis GAS
-    let gasData=null;
-    let gasSavedAt=0;
-    try{
-      const r=await fetch(GAS_URL,{redirect:"follow"});
-      const t=await r.text();
-      console.log("[DB.load] GAS répond, taille:", t.length, "chars");
-      if(t&&t.trim().length>2){
-        try{
-          const p=JSON.parse(t);
-          if(p&&typeof p==="object"&&!Array.isArray(p)&&Object.keys(p).length>0){
-            const d=extractAndRestore(JSON.parse(JSON.stringify(p)));
-            if(d){gasData=d;gasSavedAt=p._meta?.savedAt||0;}
+    // 2) Charger depuis Supabase
+    let remoteData=null;
+    let remoteSavedAt=0;
+    if(navigator.onLine){
+      try{
+        const r=await fetch(
+          `${SUPABASE_URL}/rest/v1/budget?user_id=eq.shared&select=data,meta&limit=1`,
+          {headers:SUPABASE_HEADERS}
+        );
+        const rows=await r.json();
+        if(rows&&rows.length>0){
+          const row=rows[0];
+          const payload={...row.data,...(row.meta?{_meta:row.meta}:{})};
+          const d=extractAndRestore(payload);
+          if(d&&Object.keys(d).length>0){
+            remoteData=d;
+            remoteSavedAt=row.meta?.savedAt||0;
+            console.log("[DB.load] ✅ Supabase OK, mois:", Object.keys(d).join(','));
           }
-        }catch{}
-      }
-    }catch(err){console.warn("[DB.load] ⚠️ GAS échoué:", err.message);}
-
-    // Fusionner : prendre le plus récent comme base, puis ajouter les mois manquants de l'autre
-    if(gasData&&localData){
-      let base, other;
-      if(localSavedAt>=gasSavedAt){
-        // Local plus récent → base locale
-        base=localData; other=gasData;
-        console.log("[DB.load] ✅ Local plus récent ("+localSavedAt+" >= "+gasSavedAt+")");
-      } else {
-        // GAS plus récent → base GAS
-        base=gasData; other=localData;
-        console.log("[DB.load] ✅ GAS plus récent ("+gasSavedAt+" > "+localSavedAt+")");
-      }
-      // Ajouter les mois présents dans other mais absents de base
-      Object.keys(other).forEach(k=>{
-        if(!base[k]){
-          console.log("[DB.load] Mois manquant ajouté depuis autre source:", k);
-          base[k]=other[k];
         }
-      });
-      return base;
+      }catch(err){console.warn("[DB.load] ⚠️ Supabase échoué:", err.message);}
     }
 
-    // Un seul disponible
+    // 3) Fusionner — le plus récent gagne, mois manquants fusionnés
+    if(remoteData&&localData){
+      const base=localSavedAt>=remoteSavedAt?localData:remoteData;
+      const other=localSavedAt>=remoteSavedAt?remoteData:localData;
+      Object.keys(other).forEach(k=>{if(!base[k])base[k]=other[k];});
+      console.log("[DB.load] ✅ Fusion local+remote");
+      return base;
+    }
     if(localData){console.log("[DB.load] ✅ Local uniquement");return localData;}
-    if(gasData){console.log("[DB.load] ✅ GAS uniquement");return gasData;}
-
-    // Fallback localStorage chiffré
-    try{
-      const v=localStorage.getItem("bf-local");
-      if(v){
-        try{
-          const dec=await decryptData(v);
-          if(dec&&typeof dec==="object"&&!Array.isArray(dec)){
-            const raw=dec.data&&dec.ts?dec.data:dec;
-            const d=extractAndRestore(raw);
-            if(d&&Object.keys(d).length>0){console.log("[DB.load] ✅ localStorage chiffré OK");return d;}
-          }
-        }catch{}
-      }
-    }catch{}
-
+    if(remoteData){console.log("[DB.load] ✅ Remote uniquement");return remoteData;}
     return null;
   },
 
@@ -593,97 +552,49 @@ const DB={
     const payload={
       ...data,
       _meta:{
-        commerces: getCommerces(),
-        cats: getCats(),
-        catColors: getCatCustomColors(),
-        livretA: STATE._livretA&&typeof STATE._livretA==="object"?STATE._livretA:{solde:0,transactions:[]},
-        livretCats: getLivretCats(),
-        paymentTypes: getPaymentTypes(),
-        savedAt: Date.now()
+        commerces:getCommerces(),cats:getCats(),catColors:getCatCustomColors(),
+        livretA:STATE._livretA&&typeof STATE._livretA==="object"?STATE._livretA:{solde:0,transactions:[]},
+        livretCats:getLivretCats(),paymentTypes:getPaymentTypes(),
+        savedAt:Date.now()
       }
     };
-    // 1) Sauvegarde locale IMMÉDIATE — toujours, réseau ou non
+    // Sauvegarde locale immédiate
     try{localStorage.setItem("bf-local-json",JSON.stringify(payload));}catch{}
-    try{
-      const enc=await encryptData(payload);
-      localStorage.setItem("bf-local",enc);
-    }catch{
-      try{localStorage.setItem("bf-local",JSON.stringify(payload));}catch{}
-    }
-    // 2) Marquer comme en attente d'envoi GAS
+    try{const enc=await encryptData(payload);localStorage.setItem("bf-local",enc);}catch{}
     setPending(payload);
-    // 3) Tenter l'envoi si en ligne
-    if(navigator.onLine){
-      await DB._send(payload);
-    } else {
-      console.log("[DB.save] Hors ligne — données sauvegardées localement, envoi différé");
-    }
+    if(navigator.onLine) await DB._send(payload);
+    else console.log("[DB.save] Hors ligne — envoi différé");
   },
 
   async _send(data){
     DB._lastPayload=data;
-    const jsonStr=JSON.stringify(data);
-    if(!navigator.onLine){
-      console.log("[DB._send] Hors ligne");
-      return;
-    }
-
-    const CHUNK_SIZE=4000; // ~4000 chars par morceau encodé
-
+    if(!navigator.onLine) return;
     try{
-      // Découper en morceaux
-      const chunks=[];
-      for(let i=0;i<jsonStr.length;i+=CHUNK_SIZE){
-        chunks.push(jsonStr.slice(i,i+CHUNK_SIZE));
-      }
-      console.log("[DB._send] Envoi en",chunks.length,"morceaux");
-
-      // Envoyer chaque morceau
-      for(let i=0;i<chunks.length;i++){
-        const encoded=encodeURIComponent(chunks[i]);
-        const url=`${GAS_URL}?chunk=${encoded}&idx=${i+1}&total=${chunks.length}`;
-        const r=await fetch(url,{redirect:"follow"});
+      const {_meta,...months}=data;
+      const r=await fetch(
+        `${SUPABASE_URL}/rest/v1/budget?user_id=eq.shared`,
+        {
+          method:"PATCH",
+          headers:{...SUPABASE_HEADERS,"Prefer":"return=minimal"},
+          body:JSON.stringify({data:months, meta:_meta||{}, updated_at:new Date().toISOString()})
+        }
+      );
+      if(r.ok||r.status===204){
+        console.log("[DB._send] ✅ Supabase PATCH réussi");
+        setPending(null);
+      } else {
         const txt=await r.text();
-        if(txt.trim()!=="ok"){
-          throw new Error("Morceau "+(i+1)+" refusé par GAS");
-        }
+        console.warn("[DB._send] ❌ Supabase erreur:", r.status, txt);
+        setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},5000);
       }
-
-      console.log("[DB._send] ✅ Tous les morceaux envoyés");
-
-      // Vérifier que GAS a bien reconstitué
-      setTimeout(async()=>{
-        try{
-          const check=await fetch(GAS_URL,{redirect:"follow"});
-          const txt=await check.text();
-          const parsed=JSON.parse(txt);
-          const localKeys=Object.keys(data).filter(k=>k.match(/^\d{4}-\d{2}$/));
-          const gasKeys=Object.keys(parsed).filter(k=>k.match(/^\d{4}-\d{2}$/));
-          const missing=localKeys.filter(k=>!gasKeys.includes(k));
-          if(missing.length>0){
-            console.warn("[DB._send] ⚠️ Manquants:", missing,"— retry...");
-            setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},5000);
-          } else {
-            console.log("[DB._send] ✅ GAS confirmé:", gasKeys.join(','));
-            setPending(null);
-          }
-        }catch(e){
-          console.warn("[DB._send] Vérif échouée:",e.message);
-          setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},10000);
-        }
-      },3000);
-
     }catch(e){
-      console.warn("[DB._send] ❌ Échec:",e.message);
-      setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},10000);
+      console.warn("[DB._send] ❌ Échec:", e.message);
+      setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},5000);
     }
   },
 
-  // Envoi forcé et synchrone (pour beforeunload)
   sendSync(data){
-    try{
-      navigator.sendBeacon(GAS_URL,JSON.stringify(data));
-    }catch{}
+    // Supabase ne supporte pas sendBeacon — on ignore (les données sont en localStorage)
   }
 };
 
@@ -696,7 +607,7 @@ let STATE={
   months:{},curKey:nowKey(),tab:"dashboard",loading:true,lastSync:null,
   modal:null,filtre:"toutes",monthPick:false,toast:null,toastTimer:null,
   openCourseId:null,
-  _livretA:{solde:0,transactions:[]}, // Livret A — synchronisé via GAS
+  _livretA:{solde:0,transactions:[]}, // Livret A — synchronisé via Supabase
   _livretForm:{montant:"",type:"depot",cat:""}, // formulaire Livret A persistant
 };
 function setState(p){Object.assign(STATE,p);render();}
@@ -806,11 +717,11 @@ async function init(){
     const k=nowKey();const init={[k]:makeMonth()};
     setState({months:init,loading:false,lastSync:new Date()});DB.save(init);
   }
-  setInterval(async()=>{
+  // Synchro Supabase — polling toutes les 10s + temps réel via Supabase Realtime
+  const syncFromSupabase=async()=>{
     const d=await DB.load();
     if(d&&Object.keys(d).length>0){
       Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});
-      // Cochage automatique des prélèvements passés
       const autoCoched=autoCocherPrelevements(d);
       const activeTag=document.activeElement&&document.activeElement.tagName;
       const isTyping=activeTag==="INPUT"||activeTag==="TEXTAREA"||activeTag==="SELECT";
@@ -820,10 +731,10 @@ async function init(){
       } else {
         setState({months:d,lastSync:new Date()});
       }
-      // Sauvegarder si des prélèvements ont été cochés automatiquement
       if(autoCoched>0){DB.save(d);notify("✓ "+autoCoched+" paiement"+(autoCoched>1?"s":"")+" du jour coché"+(autoCoched>1?"s":"")+" automatiquement");}
     }
-  },15000);
+  };
+  setInterval(syncFromSupabase,10000);
 }
 
 // Actions
@@ -3068,8 +2979,7 @@ window.addEventListener("beforeunload",()=>{
   if(_pendingSave) DB.sendSync(_pendingSave);
 });
 (async()=>{
-  // Déchiffrer l'URL Google Apps Script
-  GAS_URL = await _getGasUrl();
+  // Supabase — pas besoin de déchiffrer une URL
   await migratePin();
   if(!hasPin()){
     setState({screen:"setup",setupStep:0,setupInput:"",setupError:""});
