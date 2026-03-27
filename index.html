@@ -446,7 +446,8 @@ function makeMonth(srcDeps,srcMonth,targetKey){
       ?srcMonth.salaires.map(s=>({...s,id:uid(),montant:0}))
       :[{id:uid(),prenom:"Murielle",montant:0},{id:uid(),prenom:"Gilles",montant:0}],
     depenses:depsFiltered.map(d=>({...d,id:uid(),paye:false,jourPrelevement:d.jourPrelevement||0,paymentType:d.paymentType||"",dateFin:d.dateFin||""})),
-    economies:srcMonth?JSON.parse(JSON.stringify(srcMonth.economies)).map(e=>({...e,id:uid()})):[{id:uid(),type:"Vacances / Mariage / Voiture",montant:250}],
+    // Épargne remise à 0 — définie en fonction des salaires
+    economies:srcMonth?srcMonth.economies.map(e=>({...e,id:uid(),montant:0})):[{id:uid(),type:"Vacances / Mariage / Voiture",montant:0}],
     argentPoche:srcMonth?JSON.parse(JSON.stringify(srcMonth.argentPoche)):[{id:uid(),prenom:"Murielle",montant:392.24},{id:uid(),prenom:"Gilles",montant:392.24}],
     courses:[],
     livretA:[],
