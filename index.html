@@ -621,6 +621,7 @@ const DB={
   },
 
   async _send(data){
+    DB._lastPayload=data; // mémoriser pour retry
     const jsonStr=JSON.stringify(data);
     // Vérifier la connectivité réseau avant d'envoyer
     if(!navigator.onLine){
@@ -860,19 +861,8 @@ async function createMonth(key,copyKey){
   const nm=makeMonth(src?.depenses,src,key);
   const next={...STATE.months,[key]:nm};
 
-  // 1) Sauvegarder localement EN PREMIER — avant tout render
+  // Mettre à jour STATE
   STATE.months=next;
-  try{localStorage.setItem("bf-local-json",JSON.stringify({
-    ...next,
-    _meta:{
-      commerces:getCommerces(),cats:getCats(),catColors:getCatCustomColors(),
-      livretA:STATE._livretA&&typeof STATE._livretA==="object"?STATE._livretA:{solde:0,transactions:[]},
-      livretCats:getLivretCats(),paymentTypes:getPaymentTypes(),
-      savedAt:Date.now()
-    }
-  }));}catch{}
-
-  // 2) Mettre à jour STATE et afficher
   STATE.curKey=key;STATE.modal=null;STATE.monthPick=false;
   STATE.lastSync=new Date();
   STATE.toast={msg:"✓ Mois créé !",err:false};
@@ -880,8 +870,10 @@ async function createMonth(key,copyKey){
   STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
   render();
 
-  // 3) Envoyer vers GAS
+  // Sauvegarder local + envoyer GAS (forcer l'envoi même si hors ligne temporairement)
   await DB.save(next);
+  // Double envoi pour garantir la synchro
+  if(navigator.onLine) setTimeout(()=>DB._send(DB._lastPayload||next),2000);
 }
 
 // PIN logic
@@ -1864,7 +1856,9 @@ function renderStats(months,allKeys){
 function renderHistorique(months,allKeys){
   const col=div("col");
   if(allKeys.length<2){const c=div("card");c.innerHTML=`<p style="color:#64748b;text-align:center;padding:24px 0">📅 L'historique apparaîtra dès que vous aurez 2 mois enregistrés.</p>`;col.appendChild(c);return col;}
-  const rows=allKeys.map(k=>{
+
+  // Filtrer uniquement les mois avec salaires saisis
+  const rowsAll=allKeys.map(k=>{
     const m=months[k];
     const sal=m.salaires.reduce((a,x)=>a+(+x.montant||0),0);
     const dep=m.depenses.reduce((a,x)=>a+(+x.montant||0),0);
@@ -1874,6 +1868,9 @@ function renderHistorique(months,allKeys){
     const pp=dep>0?Math.round((m.depenses.filter(d=>d.paye).reduce((a,x)=>a+(+x.montant||0),0)/dep)*100):0;
     return{k,label:keyLabel(k),sal,dep,eco,solde:sal-dep-eco,pp,courses,budgetAlim};
   });
+  const rows=rowsAll.filter(r=>r.sal>0); // uniquement les mois avec salaires
+
+  if(rows.length<1){const c=div("card");c.innerHTML=`<p style="color:#64748b;text-align:center;padding:24px 0">📅 Aucun mois avec salaires saisis.</p>`;col.appendChild(c);return col;}
   const maxDep=Math.max(...rows.map(r=>r.dep),1);
   const tc=div("card");tc.appendChild(el("h3",{className:"ct"},"Récapitulatif mensuel"));
   const t=el("table",{style:"width:100%;border-collapse:collapse;font-size:12px"});
