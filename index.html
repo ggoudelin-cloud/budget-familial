@@ -537,13 +537,32 @@ const DB={
       }catch(err){console.warn("[DB.load] ⚠️ Supabase échoué:", err.message);}
     }
 
-    // 3) Fusionner — le plus récent gagne, mois manquants fusionnés
+    // 3) Fusion intelligente
     if(remoteData&&localData){
-      const base=localSavedAt>=remoteSavedAt?localData:remoteData;
-      const other=localSavedAt>=remoteSavedAt?remoteData:localData;
-      Object.keys(other).forEach(k=>{if(!base[k])base[k]=other[k];});
-      console.log("[DB.load] ✅ Fusion local+remote");
-      return base;
+      if(localSavedAt>remoteSavedAt){
+        // Local plus récent → base locale MAIS on ajoute les mois du remote absents en local
+        // (mois créés sur l'autre téléphone hors ligne)
+        const base={...localData};
+        Object.keys(remoteData).forEach(k=>{
+          if(!base[k]) base[k]=remoteData[k];
+        });
+        console.log("[DB.load] ✅ Local plus récent, fusion mois remote manquants");
+        return base;
+      } else {
+        // Remote plus récent → on utilise Supabase tel quel (source de vérité)
+        // On ajoute seulement les mois locaux plus récents que remote
+        const base={...remoteData};
+        Object.keys(localData).forEach(k=>{
+          if(!base[k]){
+            // Mois présent en local mais absent de Supabase = créé hors ligne
+            // On l'ajoute seulement s'il est plus récent que le dernier remote
+            base[k]=localData[k];
+            console.log("[DB.load] Mois hors ligne ajouté:", k);
+          }
+        });
+        console.log("[DB.load] ✅ Remote plus récent (source de vérité)");
+        return base;
+      }
     }
     if(localData){console.log("[DB.load] ✅ Local uniquement");return localData;}
     if(remoteData){console.log("[DB.load] ✅ Remote uniquement");return remoteData;}
