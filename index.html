@@ -624,49 +624,58 @@ const DB={
     DB._lastPayload=data;
     const jsonStr=JSON.stringify(data);
     if(!navigator.onLine){
-      console.log("[DB._send] Hors ligne — envoi annulé");
+      console.log("[DB._send] Hors ligne");
       return;
     }
-    try{
-      const controller=new AbortController();
-      const timeout=setTimeout(()=>controller.abort(),8000);
-      await fetch(GAS_URL,{
-        method:"POST",
-        mode:"no-cors",
-        body:jsonStr,
-        signal:controller.signal
-      });
-      clearTimeout(timeout);
-      console.log("[DB._send] POST envoyé — vérification GAS dans 3s...");
 
-      // Vérifier que GAS a bien reçu en relisant après 3s
+    const CHUNK_SIZE=4000; // ~4000 chars par morceau encodé
+
+    try{
+      // Découper en morceaux
+      const chunks=[];
+      for(let i=0;i<jsonStr.length;i+=CHUNK_SIZE){
+        chunks.push(jsonStr.slice(i,i+CHUNK_SIZE));
+      }
+      console.log("[DB._send] Envoi en",chunks.length,"morceaux");
+
+      // Envoyer chaque morceau
+      for(let i=0;i<chunks.length;i++){
+        const encoded=encodeURIComponent(chunks[i]);
+        const url=`${GAS_URL}?chunk=${encoded}&idx=${i+1}&total=${chunks.length}`;
+        const r=await fetch(url,{redirect:"follow"});
+        const txt=await r.text();
+        if(txt.trim()!=="ok"){
+          throw new Error("Morceau "+(i+1)+" refusé par GAS");
+        }
+      }
+
+      console.log("[DB._send] ✅ Tous les morceaux envoyés");
+
+      // Vérifier que GAS a bien reconstitué
       setTimeout(async()=>{
         try{
           const check=await fetch(GAS_URL,{redirect:"follow"});
           const txt=await check.text();
           const parsed=JSON.parse(txt);
-          // Vérifier que les mois locaux sont dans GAS
           const localKeys=Object.keys(data).filter(k=>k.match(/^\d{4}-\d{2}$/));
           const gasKeys=Object.keys(parsed).filter(k=>k.match(/^\d{4}-\d{2}$/));
           const missing=localKeys.filter(k=>!gasKeys.includes(k));
           if(missing.length>0){
-            console.warn("[DB._send] ⚠️ Mois manquants dans GAS:", missing, "— retry...");
-            DB._send(data); // retry
+            console.warn("[DB._send] ⚠️ Manquants:", missing,"— retry...");
+            setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},5000);
           } else {
-            console.log("[DB._send] ✅ GAS confirmé — mois:", gasKeys.join(','));
+            console.log("[DB._send] ✅ GAS confirmé:", gasKeys.join(','));
             setPending(null);
           }
         }catch(e){
-          console.warn("[DB._send] ⚠️ Vérification GAS échouée:", e.message, "— retry...");
-          setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},5000);
+          console.warn("[DB._send] Vérif échouée:",e.message);
+          setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},10000);
         }
       },3000);
 
     }catch(e){
-      console.warn("[DB._send] ❌ Échec envoi:", e.message);
-      setTimeout(()=>{
-        if(_pendingSave&&navigator.onLine) DB._send(_pendingSave);
-      },10000);
+      console.warn("[DB._send] ❌ Échec:",e.message);
+      setTimeout(()=>{if(_pendingSave&&navigator.onLine)DB._send(_pendingSave);},10000);
     }
   },
 
