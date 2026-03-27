@@ -435,15 +435,16 @@ const BASE=[
 ];
 
 function makeMonth(srcDeps,srcMonth,targetKey){
-  // Si on copie depuis un mois source, exclure les dépenses dont la date de fin est dépassée
   const depsSrc=srcDeps||(srcMonth?srcMonth.depenses:null)||BASE;
   const depsFiltered=targetKey?depsSrc.filter(d=>{
-    if(!d.dateFin)return true; // pas de date de fin → toujours inclus
-    // dateFin format "YYYY-MM" — exclure si < mois cible
+    if(!d.dateFin)return true;
     return d.dateFin>=targetKey;
   }):depsSrc;
   return {
-    salaires:srcMonth?JSON.parse(JSON.stringify(srcMonth.salaires)):[{id:uid(),prenom:"Murielle",montant:1654.82},{id:uid(),prenom:"Gilles",montant:3048.64}],
+    // Salaires toujours à 0 — à saisir chaque mois
+    salaires:srcMonth
+      ?srcMonth.salaires.map(s=>({...s,id:uid(),montant:0}))
+      :[{id:uid(),prenom:"Murielle",montant:0},{id:uid(),prenom:"Gilles",montant:0}],
     depenses:depsFiltered.map(d=>({...d,id:uid(),paye:false,jourPrelevement:d.jourPrelevement||0,paymentType:d.paymentType||"",dateFin:d.dateFin||""})),
     economies:srcMonth?JSON.parse(JSON.stringify(srcMonth.economies)).map(e=>({...e,id:uid()})):[{id:uid(),type:"Vacances / Mariage / Voiture",montant:250}],
     argentPoche:srcMonth?JSON.parse(JSON.stringify(srcMonth.argentPoche)):[{id:uid(),prenom:"Murielle",montant:392.24},{id:uid(),prenom:"Gilles",montant:392.24}],
@@ -1095,15 +1096,19 @@ function renderApp(){
   const hbtns=div("hbtns");
   const lockB=el("button",{className:"icon-btn",title:"Verrouiller"});lockB.textContent="🔒";lockB.onclick=()=>{localStorage.removeItem(PIN_AUTH_KEY);setState({screen:"pin",pinInput:"",pinError:""});};
   const pinB=el("button",{className:"icon-btn",title:"Changer PIN"});pinB.textContent="🔑";pinB.onclick=()=>setState({modal:{type:"changePin"},changePinStep:1,changePinInput:"",changePinError:""});
-  const refB=el("button",{className:"icon-btn",title:"Actualiser"});refB.textContent="⟳";
+  const refB=el("button",{className:"icon-btn",title:"Actualiser / Synchroniser"});refB.textContent="⟳";
   refB.onclick=async()=>{
+    notify("⏳ Synchronisation...");
+    // Forcer l'envoi des données locales vers Supabase
+    if(STATE.months&&Object.keys(STATE.months).length>0){
+      await DB.save(STATE.months);
+    }
+    // Puis recharger depuis Supabase
     const d=await DB.load();
     if(d&&Object.keys(d).length>0){
       Object.keys(d).forEach(k=>{if(!d[k].courses)d[k].courses=[];});
       STATE.months=d;STATE.lastSync=new Date();
-      STATE.toast={msg:"✓ Actualisé",err:false};
-      clearTimeout(STATE.toastTimer);
-      STATE.toastTimer=setTimeout(()=>{STATE.toast=null;render();},2800);
+      notify("✓ Synchronisé avec Supabase !");
       render();
     }
   };
@@ -1789,6 +1794,25 @@ function renderStats(months,allKeys){
     ["#8B5CF6","#10B981"],
     ["Par mois","Cumulée"]
   ));
+
+  // Graphique 5 : Évolution Livret A
+  const livretSoldes=sorted.map((k,idx)=>{
+    let s=0;
+    sorted.slice(0,idx+1).forEach(kk=>{
+      (months[kk].livretA||[]).forEach(tx=>{s+=tx.type==="depot"?tx.montant:-tx.montant;});
+    });
+    return s;
+  });
+  const livretMouvements=sorted.map(k=>(months[k].livretA||[]).reduce((a,tx)=>a+(tx.type==="depot"?tx.montant:-tx.montant),0));
+  const hasLivret=livretSoldes.some(v=>v>0);
+  if(hasLivret){
+    col.appendChild(makeCurveCard(
+      "🏦 Livret A — évolution",
+      [livretSoldes, livretMouvements],
+      ["#F59E0B","#10B981"],
+      ["Solde cumulé","Mouvements du mois"]
+    ));
+  }
 
   return col;
 }
