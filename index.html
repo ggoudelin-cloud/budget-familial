@@ -1251,19 +1251,6 @@ function renderDashboard(data,totSal,totDep,totEco,paye,solde){
   data.economies.forEach(x=>{const li=div("li");const lb=el("span",{style:"font-size:13px;color:#cbd5e1;flex:1;margin-right:8px"});lb.textContent=x.type;li.append(lb,iedit(fmt(x.montant),"#F59E0B",()=>setState({modal:{type:"edit",itemType:"economie",item:{...x}}})));ec.appendChild(li);});
   if(data.economies.length){const et2=div("li");et2.style.cssText="border-top:1px solid #334155;margin-top:6px;padding-top:10px;border-bottom:none";et2.innerHTML=`<span style="color:#94a3b8;font-weight:700">Total</span><span style="color:#F59E0B;font-weight:800;font-size:16px">${fmt(totEco)}</span>`;ec.appendChild(et2);}
 
-  // Livret A — solde actuel simple
-  const livSoldeActuel=(()=>{
-    let s=0;
-    Object.keys(STATE.months).sort().forEach(k=>{
-      (STATE.months[k].livretA||[]).forEach(tx=>{s+=tx.type==="depot"?tx.montant:-tx.montant;});
-    });
-    return s;
-  })();
-  if(livSoldeActuel>0){
-    const livLi=div("li");livLi.style.cssText="border-bottom:none;margin-top:2px";
-    livLi.innerHTML=`<span style="color:#94a3b8;font-size:13px">🏦 Livret A</span><span style="color:#F59E0B;font-weight:800;font-size:16px">${fmt(livSoldeActuel)}</span>`;
-    ec.appendChild(livLi);
-  }
   col.appendChild(ec);
 
   // Argent de poche (calculé automatiquement)
