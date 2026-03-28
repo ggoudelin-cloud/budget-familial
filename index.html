@@ -622,6 +622,7 @@ let STATE={
   screen:"login", // "login" | "magic-sent" | "app"
   loginEmail:"",loginError:"",loginLoading:false,
   moisSub:"resume", // "resume" | "depenses" | "courses"
+  analyseSub:"recap", // "recap" | "graphiques"
   months:{},curKey:nowKey(),tab:"mois",loading:true,lastSync:null,
   modal:null,filtre:"toutes",monthPick:false,toast:null,toastTimer:null,
   openCourseId:null,
@@ -1192,8 +1193,19 @@ function renderApp(){
     if(moisSub==="courses") main.appendChild(renderAlimentationCard(data));
   }
   if(tab==="analyse"){
-    main.appendChild(renderHistorique(months,allKeys));
-    main.appendChild(renderStats(months,allKeys));
+    const analyseSub=STATE.analyseSub||"recap";
+    const subBar2=div("");subBar2.style.cssText="display:flex;gap:6px;padding:0 0 10px 0";
+    [["recap","📋 Récapitulatif"],["graphiques","📈 Graphiques"]].forEach(([id,label])=>{
+      const b=el("button",{type:"button"});
+      b.textContent=label;
+      const isOn=analyseSub===id;
+      b.style.cssText=`flex:1;padding:8px 4px;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;border:none;background:${isOn?"#1d4ed8":"#1e293b"};color:${isOn?"#fff":"#64748b"}`;
+      b.onclick=()=>setState({analyseSub:id});
+      subBar2.appendChild(b);
+    });
+    main.appendChild(subBar2);
+    if(analyseSub==="recap") main.appendChild(renderHistorique(months,allKeys));
+    if(analyseSub==="graphiques") main.appendChild(renderStats(months,allKeys));
   }
   if(tab==="livreta") main.appendChild(renderLivretATab(months,allKeys));
   wrap.appendChild(main);
