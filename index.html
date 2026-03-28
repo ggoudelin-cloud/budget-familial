@@ -921,10 +921,15 @@ async function sendMagicLink(){
   }
   STATE.loginLoading=true;STATE.loginError="";render();
   try{
-    const r=await fetch(`${SUPABASE_URL}/auth/v1/magiclink`,{
+    const r=await fetch(`${SUPABASE_URL}/auth/v1/otp`,{
       method:"POST",
       headers:{...SUPABASE_HEADERS,"Content-Type":"application/json"},
-      body:JSON.stringify({email,options:{emailRedirectTo:"https://ggoudelin-cloud.github.io/budget-familial/"}})
+      body:JSON.stringify({
+        email,
+        create_user:true,
+        data:{},
+        redirect_to:"https://ggoudelin-cloud.github.io/budget-familial/"
+      })
     });
     if(r.ok||r.status===200){
       STATE.loginLoading=false;
