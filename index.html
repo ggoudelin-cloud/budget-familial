@@ -210,6 +210,16 @@ function isAuthed(){
 }
 function getAuthedEmail(){const s=getSession();return s?.user?.email||localStorage.getItem(ML_EMAIL_KEY)||"";}
 
+// Vérifier si l'utilisateur est admin via Supabase
+async function checkIsAdmin(){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/admin_emails?email=eq.${encodeURIComponent(getAuthedEmail())}&select=email&limit=1`,{headers:getAuthHeaders()});
+    const data=await r.json();
+    STATE._isAdmin=Array.isArray(data)&&data.length>0;
+  }catch{STATE._isAdmin=false;}
+  return STATE._isAdmin;
+}
+
 // ── Fonctions Admin ───────────────────────────────────────────────────────────
 async function logConnection(email,token){
   try{
@@ -760,7 +770,10 @@ function autoCocherPrelevements(months){
 }
 
 async function init(){
-  // Migration : renommer "Bio c' Bon" en "Biocoop" dans les commerces sauvegardés
+  // Vérifier si admin via Supabase
+  await checkIsAdmin();
+
+  // Migration : renommer "Bio c' Bon" en "Biocoop"
   try {
     const saved = localStorage.getItem("bf-commerces");
     if(saved){
@@ -1087,9 +1100,9 @@ function renderApp(){
     }
   };
   hbtns.append(lockB,pinB,refB);
-  // Bouton admin — visible uniquement pour l'administrateur
+  // Bouton admin — visible uniquement pour les administrateurs (vérifié via Supabase)
   const ADMIN_EMAIL="goudelin.gilles@hotmail.com";
-  if(getAuthedEmail()===ADMIN_EMAIL){
+  if(STATE._isAdmin){
     const adminB=el("button",{className:"icon-btn",title:"Administration"});
     adminB.textContent="⚙️";
     adminB.onclick=()=>setState({modal:{type:"admin"}});
