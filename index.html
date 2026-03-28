@@ -2127,14 +2127,30 @@ function renderModal(modal,data,months,allKeys){
         title.textContent="Emails autorisés à se connecter";
         adminContent.appendChild(title);
         emails.forEach(email=>{
-          const row=div("");row.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e3a5f";
+          const row=div("");row.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e3a5f;flex-wrap:wrap;gap:4px";
           const em=el("span",{style:"color:#f1f5f9;font-size:13px;flex:1"});em.textContent=email;
           const del=el("button",{type:"button"});del.textContent="🗑";del.style.cssText="background:transparent;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:0 4px";
           del.onclick=async e=>{
             e.stopPropagation();
             if(email===ADMIN_EMAIL){notify("Impossible de supprimer l'admin principal","err");return;}
-            if(await deleteAllowedEmail(email)){notify("✓ Email supprimé");renderAdminContent("emails");}
-            else notify("Erreur suppression","err");
+            // Confirmation inline
+            const existing=row.querySelector(".del-confirm-email");
+            if(existing){existing.remove();return;}
+            const cf=div("del-confirm-email");
+            cf.style.cssText="width:100%;display:flex;align-items:center;gap:8px;padding:6px 0";
+            cf.onclick=e=>e.stopPropagation();
+            const msg=el("span",{style:"color:#fca5a5;font-size:12px;flex:1"});msg.textContent=`Supprimer ${email} ?`;
+            const oui=el("button",{type:"button"});oui.textContent="✓ Oui";
+            oui.style.cssText="background:#EF4444;border:none;color:#fff;border-radius:6px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer";
+            oui.onclick=async e=>{
+              e.stopPropagation();
+              if(await deleteAllowedEmail(email)){notify("✓ Email supprimé");renderAdminContent("emails");}
+              else notify("Erreur suppression","err");
+            };
+            const non=el("button",{type:"button"});non.textContent="Annuler";
+            non.style.cssText="background:#334155;border:none;color:#94a3b8;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer";
+            non.onclick=e=>{e.stopPropagation();cf.remove();};
+            cf.append(msg,oui,non);row.appendChild(cf);
           };
           row.append(em,del);adminContent.appendChild(row);
         });
@@ -2161,14 +2177,29 @@ function renderModal(modal,data,months,allKeys){
         title.textContent="Administrateurs de l'application";
         adminContent.appendChild(title);
         admins.forEach(email=>{
-          const row=div("");row.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e3a5f";
+          const row=div("");row.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e3a5f;flex-wrap:wrap;gap:4px";
           const em=el("span",{style:"color:#F59E0B;font-size:13px;flex:1"});em.textContent="👑 "+email;
           const del=el("button",{type:"button"});del.textContent="🗑";del.style.cssText="background:transparent;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:0 4px";
           del.onclick=async e=>{
             e.stopPropagation();
             if(email===ADMIN_EMAIL){notify("Impossible de supprimer l'admin principal","err");return;}
-            if(await deleteAdminEmail(email)){notify("✓ Admin supprimé");renderAdminContent("admins");}
-            else notify("Erreur suppression","err");
+            const existing=row.querySelector(".del-confirm-admin");
+            if(existing){existing.remove();return;}
+            const cf=div("del-confirm-admin");
+            cf.style.cssText="width:100%;display:flex;align-items:center;gap:8px;padding:6px 0";
+            cf.onclick=e=>e.stopPropagation();
+            const msg=el("span",{style:"color:#fca5a5;font-size:12px;flex:1"});msg.textContent=`Retirer admin ${email} ?`;
+            const oui=el("button",{type:"button"});oui.textContent="✓ Oui";
+            oui.style.cssText="background:#EF4444;border:none;color:#fff;border-radius:6px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer";
+            oui.onclick=async e=>{
+              e.stopPropagation();
+              if(await deleteAdminEmail(email)){notify("✓ Admin supprimé");renderAdminContent("admins");}
+              else notify("Erreur suppression","err");
+            };
+            const non=el("button",{type:"button"});non.textContent="Annuler";
+            non.style.cssText="background:#334155;border:none;color:#94a3b8;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer";
+            non.onclick=e=>{e.stopPropagation();cf.remove();};
+            cf.append(msg,oui,non);row.appendChild(cf);
           };
           row.append(em,del);adminContent.appendChild(row);
         });
