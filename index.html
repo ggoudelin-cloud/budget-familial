@@ -2876,14 +2876,18 @@ window.addEventListener("beforeunload",()=>{
 (async()=>{
   // Vérifier si Magic Link callback (hash dans l'URL)
   const hash=window.location.hash;
-  if(hash&&hash.includes("access_token")){
-    // Extraire le token du hash
+  if(hash&&(hash.includes("access_token")||hash.includes("error"))){
     const params=new URLSearchParams(hash.substring(1));
+    const error=params.get("error_description");
+    if(error){
+      console.error("Auth erreur:",error);
+      document.getElementById("root").innerHTML=`<div style="padding:40px;text-align:center;color:#EF4444;font-family:sans-serif;background:#0f172a;min-height:100vh"><h2>Erreur d'authentification</h2><p>${error}</p><button onclick="window.location.hash='';window.location.reload()" style="margin-top:20px;background:#3B82F6;border:none;color:#fff;padding:12px 24px;border-radius:8px;cursor:pointer">Réessayer</button></div>`;
+      return;
+    }
     const accessToken=params.get("access_token");
     const refreshToken=params.get("refresh_token");
     const expiresAt=params.get("expires_at");
     if(accessToken){
-      // Récupérer les infos utilisateur
       try{
         const r=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
           headers:{...SUPABASE_HEADERS,"Authorization":"Bearer "+accessToken}
@@ -2891,7 +2895,7 @@ window.addEventListener("beforeunload",()=>{
         const user=await r.json();
         if(user&&user.email){
           if(!ALLOWED_EMAILS.includes(user.email)){
-            document.getElementById("root").innerHTML=`<div style="padding:40px;text-align:center;color:#EF4444;font-family:sans-serif"><h2>Accès refusé</h2><p>${user.email} n'est pas autorisé.</p></div>`;
+            document.getElementById("root").innerHTML=`<div style="padding:40px;text-align:center;color:#EF4444;font-family:sans-serif;background:#0f172a;min-height:100vh"><h2>Accès refusé</h2><p>${user.email} n'est pas autorisé.</p></div>`;
             return;
           }
           setSession({access_token:accessToken,refresh_token:refreshToken,expires_at:parseInt(expiresAt),user});
