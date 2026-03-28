@@ -209,7 +209,83 @@ function isAuthed(){
   return true;
 }
 function getAuthedEmail(){const s=getSession();return s?.user?.email||localStorage.getItem(ML_EMAIL_KEY)||"";}
-const CATEGORIES_BASE=["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
+
+// ── Fonctions Admin ───────────────────────────────────────────────────────────
+async function logConnection(email,token){
+  try{
+    // Supprimer les logs > 30 jours d'abord
+    await fetch(`${SUPABASE_URL}/rest/v1/connection_logs?connected_at=lt.${new Date(Date.now()-30*24*60*60*1000).toISOString()}`,{
+      method:"DELETE",headers:{...getAuthHeaders(),"Prefer":"return=minimal"}
+    });
+    // Insérer le nouveau log
+    await fetch(`${SUPABASE_URL}/rest/v1/connection_logs`,{
+      method:"POST",
+      headers:{...getAuthHeaders(),"Prefer":"return=minimal"},
+      body:JSON.stringify({email,user_agent:navigator.userAgent.substring(0,200)})
+    });
+  }catch(e){console.warn("Log connexion échoué:",e.message);}
+}
+
+async function getAdminEmails(){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/admin_emails?select=email&order=email`,{headers:getAuthHeaders()});
+    const data=await r.json();
+    return data.map(x=>x.email);
+  }catch{return[];}
+}
+
+async function getAllowedEmails(){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/allowed_emails?select=email&order=email`,{headers:getAuthHeaders()});
+    const data=await r.json();
+    return data.map(x=>x.email);
+  }catch{return[];}
+}
+
+async function getConnectionLogs(){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/connection_logs?select=email,connected_at,user_agent&order=connected_at.desc&limit=100`,{headers:getAuthHeaders()});
+    return await r.json();
+  }catch{return[];}
+}
+
+async function addAllowedEmail(email){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/allowed_emails`,{
+      method:"POST",headers:{...getAuthHeaders(),"Prefer":"return=minimal"},
+      body:JSON.stringify({email})
+    });
+    return r.ok||r.status===201;
+  }catch{return false;}
+}
+
+async function deleteAllowedEmail(email){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/allowed_emails?email=eq.${encodeURIComponent(email)}`,{
+      method:"DELETE",headers:{...getAuthHeaders(),"Prefer":"return=minimal"}
+    });
+    return r.ok||r.status===204;
+  }catch{return false;}
+}
+
+async function addAdminEmail(email){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/admin_emails`,{
+      method:"POST",headers:{...getAuthHeaders(),"Prefer":"return=minimal"},
+      body:JSON.stringify({email})
+    });
+    return r.ok||r.status===201;
+  }catch{return false;}
+}
+
+async function deleteAdminEmail(email){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/admin_emails?email=eq.${encodeURIComponent(email)}`,{
+      method:"DELETE",headers:{...getAuthHeaders(),"Prefer":"return=minimal"}
+    });
+    return r.ok||r.status===204;
+  }catch{return false;}
+}const CATEGORIES_BASE=["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
 const CAT_COLORS_EXTRA=["#6366f1","#0ea5e9","#d946ef","#f97316","#14b8a6","#a855f7","#eab308","#78716c"];
 
 // ── Types de paiement ──────────────────────────────────────────────────────
@@ -1010,7 +1086,16 @@ function renderApp(){
       render();
     }
   };
-  hbtns.append(lockB,pinB,refB);hrow.append(tWrap,hbtns);
+  hbtns.append(lockB,pinB,refB);
+  // Bouton admin — visible uniquement pour l'administrateur
+  const ADMIN_EMAIL="goudelin.gilles@hotmail.com";
+  if(getAuthedEmail()===ADMIN_EMAIL){
+    const adminB=el("button",{className:"icon-btn",title:"Administration"});
+    adminB.textContent="⚙️";
+    adminB.onclick=()=>setState({modal:{type:"admin"}});
+    hbtns.appendChild(adminB);
+  }
+  hrow.append(tWrap,hbtns);
   const mbar=div("mbar");
   const mselB=el("button",{className:"msel"});mselB.textContent=`📅 ${keyLabel(curKey)} ▾`;mselB.onclick=()=>setState({monthPick:!STATE.monthPick});
   const mnewB=el("button",{className:"mnew"});mnewB.textContent="+ Mois";mnewB.onclick=()=>setState({modal:{type:"newMonth"}});
@@ -1974,6 +2059,128 @@ function renderModal(modal,data,months,allKeys){
   const ol=div("overlay");ol.onclick=()=>setState({modal:null});
   const m=div("modal");m.onclick=e=>e.stopPropagation();
 
+  // ── ADMIN ──────────────────────────────────────────────────────────────────
+  if(modal.type==="admin"){
+    const ADMIN_EMAIL="goudelin.gilles@hotmail.com";
+    if(getAuthedEmail()!==ADMIN_EMAIL){
+      m.appendChild(el("p",{style:"color:#EF4444;text-align:center;padding:20px"},"Accès refusé"));
+      const ca=el("button",{className:"b-can"});ca.textContent="Fermer";ca.onclick=()=>setState({modal:null});m.appendChild(ca);
+      ol.appendChild(m);return ol;
+    }
+
+    m.appendChild(el("h2",{className:"mt"},"⚙️ Administration"));
+
+    // Sous-onglets admin
+    let adminTab=modal.adminTab||"emails";
+    const adminTabs=div("");adminTabs.style.cssText="display:flex;gap:6px;margin-bottom:16px";
+    [["emails","📧 Emails"],["admins","👑 Admins"],["logs","📋 Logs"]].forEach(([id,label])=>{
+      const b=el("button",{type:"button"});b.textContent=label;
+      const isOn=adminTab===id;
+      b.style.cssText=`flex:1;padding:7px 4px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;border:none;background:${isOn?"#1d4ed8":"#1e293b"};color:${isOn?"#fff":"#64748b"}`;
+      b.onclick=e=>{e.stopPropagation();STATE.modal={...modal,adminTab:id};renderAdminContent(id);};
+      adminTabs.appendChild(b);
+    });
+    m.appendChild(adminTabs);
+
+    const adminContent=div("");m.appendChild(adminContent);
+
+    async function renderAdminContent(tab){
+      adminContent.innerHTML=`<div style="text-align:center;padding:20px;color:#64748b">⏳ Chargement...</div>`;
+
+      if(tab==="emails"){
+        const emails=await getAllowedEmails();
+        adminContent.innerHTML="";
+        const title=el("p",{style:"color:#94a3b8;font-size:12px;margin-bottom:10px;font-weight:700"});
+        title.textContent="Emails autorisés à se connecter";
+        adminContent.appendChild(title);
+        emails.forEach(email=>{
+          const row=div("");row.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e3a5f";
+          const em=el("span",{style:"color:#f1f5f9;font-size:13px;flex:1"});em.textContent=email;
+          const del=el("button",{type:"button"});del.textContent="🗑";del.style.cssText="background:transparent;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:0 4px";
+          del.onclick=async e=>{
+            e.stopPropagation();
+            if(email===ADMIN_EMAIL){notify("Impossible de supprimer l'admin principal","err");return;}
+            if(await deleteAllowedEmail(email)){notify("✓ Email supprimé");renderAdminContent("emails");}
+            else notify("Erreur suppression","err");
+          };
+          row.append(em,del);adminContent.appendChild(row);
+        });
+        // Ajouter un email
+        const addRow=div("");addRow.style.cssText="display:flex;gap:8px;margin-top:12px";addRow.onclick=e=>e.stopPropagation();
+        const inp=el("input",{type:"email",placeholder:"nouveau@email.com"});
+        inp.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:13px";
+        inp.onclick=e=>e.stopPropagation();
+        const addBtn=el("button",{type:"button"});addBtn.textContent="+ Ajouter";
+        addBtn.style.cssText="background:#10B981;border:none;color:#fff;border-radius:8px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer";
+        addBtn.onclick=async e=>{
+          e.stopPropagation();const email=inp.value.trim().toLowerCase();
+          if(!email||!email.includes("@")){notify("Email invalide","err");return;}
+          if(await addAllowedEmail(email)){inp.value="";notify("✓ Email ajouté");renderAdminContent("emails");}
+          else notify("Erreur ou email déjà existant","err");
+        };
+        addRow.append(inp,addBtn);adminContent.appendChild(addRow);
+      }
+
+      else if(tab==="admins"){
+        const admins=await getAdminEmails();
+        adminContent.innerHTML="";
+        const title=el("p",{style:"color:#94a3b8;font-size:12px;margin-bottom:10px;font-weight:700"});
+        title.textContent="Administrateurs de l'application";
+        adminContent.appendChild(title);
+        admins.forEach(email=>{
+          const row=div("");row.style.cssText="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #1e3a5f";
+          const em=el("span",{style:"color:#F59E0B;font-size:13px;flex:1"});em.textContent="👑 "+email;
+          const del=el("button",{type:"button"});del.textContent="🗑";del.style.cssText="background:transparent;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:0 4px";
+          del.onclick=async e=>{
+            e.stopPropagation();
+            if(email===ADMIN_EMAIL){notify("Impossible de supprimer l'admin principal","err");return;}
+            if(await deleteAdminEmail(email)){notify("✓ Admin supprimé");renderAdminContent("admins");}
+            else notify("Erreur suppression","err");
+          };
+          row.append(em,del);adminContent.appendChild(row);
+        });
+        const addRow=div("");addRow.style.cssText="display:flex;gap:8px;margin-top:12px";addRow.onclick=e=>e.stopPropagation();
+        const inp=el("input",{type:"email",placeholder:"admin@email.com"});
+        inp.style.cssText="flex:1;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:8px 10px;color:#f1f5f9;font-size:13px";
+        inp.onclick=e=>e.stopPropagation();
+        const addBtn=el("button",{type:"button"});addBtn.textContent="+ Ajouter";
+        addBtn.style.cssText="background:#F59E0B;border:none;color:#000;border-radius:8px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer";
+        addBtn.onclick=async e=>{
+          e.stopPropagation();const email=inp.value.trim().toLowerCase();
+          if(!email||!email.includes("@")){notify("Email invalide","err");return;}
+          if(await addAdminEmail(email)){inp.value="";notify("✓ Admin ajouté");renderAdminContent("admins");}
+          else notify("Erreur ou email déjà existant","err");
+        };
+        addRow.append(inp,addBtn);adminContent.appendChild(addRow);
+      }
+
+      else if(tab==="logs"){
+        const logs=await getConnectionLogs();
+        adminContent.innerHTML="";
+        const title=el("p",{style:"color:#94a3b8;font-size:12px;margin-bottom:10px;font-weight:700"});
+        title.textContent=`Connexions récentes (30 jours) — ${logs.length} entrée${logs.length>1?"s":""}`;
+        adminContent.appendChild(title);
+        if(!logs.length){
+          const p=el("p",{style:"color:#475569;font-size:12px;text-align:center;padding:10px"});
+          p.textContent="Aucune connexion enregistrée";adminContent.appendChild(p);return;
+        }
+        logs.forEach(log=>{
+          const row=div("");row.style.cssText="padding:8px 0;border-bottom:1px solid #1e3a5f";
+          const date=new Date(log.connected_at);
+          const dateStr=date.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+date.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+          const isMe=log.email===ADMIN_EMAIL;
+          row.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><span style="color:${isMe?"#3B82F6":"#EC4899"};font-weight:700;font-size:12px">${log.email}</span><span style="color:#64748b;font-size:11px">${dateStr}</span></div><div style="color:#475569;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(log.user_agent||"").substring(0,60)}</div>`;
+          adminContent.appendChild(row);
+        });
+      }
+    }
+
+    renderAdminContent(adminTab);
+
+    const ca=el("button",{className:"b-can",style:"margin-top:16px"});ca.textContent="Fermer";ca.onclick=()=>setState({modal:null});m.appendChild(ca);
+    ol.appendChild(m);return ol;
+  }
+
   // ── Ajouter une course ──
   if(modal.type==="addCourse"){
     // Persister les valeurs du formulaire dans STATE
@@ -2872,8 +3079,9 @@ window.addEventListener("beforeunload",()=>{
           // Accès vérifié côté Supabase via RLS
           setSession({access_token:accessToken,refresh_token:refreshToken,expires_at:parseInt(expiresAt),user});
           localStorage.setItem(ML_EMAIL_KEY,user.email);
-          // Nettoyer l'URL
           window.history.replaceState(null,"",window.location.pathname);
+          // Logger la connexion
+          logConnection(user.email,accessToken);
         }
       }catch(e){console.error("Auth callback erreur:",e);}
     }
