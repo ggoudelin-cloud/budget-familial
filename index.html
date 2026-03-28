@@ -772,8 +772,9 @@ function autoCocherPrelevements(months){
 }
 
 async function init(){
-  // Vérifier si admin via Supabase
+  // Vérifier si admin via Supabase puis re-render pour afficher le bouton ⚙️
   await checkIsAdmin();
+  render(); // re-render avec STATE._isAdmin à jour
   // Logger la connexion (session déjà active)
   logConnection(getAuthedEmail());
 
