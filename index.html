@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0iIzFlMjkzYiIvPgogIDx0ZXh0IHg9IjE2IiB5PSIyMyIgZm9udC1zaXplPSIyMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsIj7wn5K2PC90ZXh0Pgo8L3N2Zz4=">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -214,8 +215,9 @@ function getAuthedEmail(){const s=getSession();return s?.user?.email||localStora
 async function checkIsAdmin(){
   try{
     const email=getAuthedEmail();
+    console.log("[admin] email:", email, "token présent:", !!getSession()?.access_token);
+    if(!email){STATE._isAdmin=false;return false;}
     const headers=getAuthHeaders();
-    console.log("[admin] email:", email, "token:", headers.Authorization?.substring(0,40));
     const r=await fetch(`${SUPABASE_URL}/rest/v1/admin_emails?email=eq.${encodeURIComponent(email)}&select=email&limit=1`,{headers});
     console.log("[admin] status:", r.status);
     const data=await r.json();
