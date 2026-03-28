@@ -84,7 +84,7 @@ main{padding:12px 12px 90px}
 .sm-btn{background:#1d4ed8;border:none;color:#fff;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:flex-end;justify-content:center}
 .overlay2{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;justify-content:center;align-items:flex-start;padding-top:80px}
-.modal{background:#1e293b;border-radius:20px 20px 0 0;padding:24px 20px 40px;width:100%;max-width:480px;max-height:82vh;overflow-y:auto;animation:slideUp .25s}
+.modal{background:#1e293b;border-radius:20px 20px 0 0;padding:24px 20px 40px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;animation:slideUp .25s}
 .picker{background:#1e293b;border-radius:12px;padding:16px;width:270px;max-height:370px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6)}
 .ptitle{margin:0 0 10px;font-size:14px;font-weight:800;color:#94a3b8}
 .pbtn{display:block;width:100%;background:transparent;border:none;color:#cbd5e1;padding:10px 8px;text-align:left;font-weight:600;font-size:14px;cursor:pointer;border-radius:8px}
@@ -221,10 +221,11 @@ async function checkIsAdmin(){
 }
 
 // ── Fonctions Admin ───────────────────────────────────────────────────────────
-async function logConnection(email,token){
+async function logConnection(email){
   try{
-    // Supprimer les logs > 30 jours d'abord
-    await fetch(`${SUPABASE_URL}/rest/v1/connection_logs?connected_at=lt.${new Date(Date.now()-30*24*60*60*1000).toISOString()}`,{
+    // Supprimer les logs > 30 jours
+    const cutoff=new Date(Date.now()-30*24*60*60*1000).toISOString();
+    await fetch(`${SUPABASE_URL}/rest/v1/connection_logs?connected_at=lt.${cutoff}`,{
       method:"DELETE",headers:{...getAuthHeaders(),"Prefer":"return=minimal"}
     });
     // Insérer le nouveau log
@@ -233,7 +234,8 @@ async function logConnection(email,token){
       headers:{...getAuthHeaders(),"Prefer":"return=minimal"},
       body:JSON.stringify({email,user_agent:navigator.userAgent.substring(0,200)})
     });
-  }catch(e){console.warn("Log connexion échoué:",e.message);}
+    console.log("[logConnection] ✅ Connexion loggée pour",email);
+  }catch(e){console.warn("[logConnection] Erreur:",e.message);}
 }
 
 async function getAdminEmails(){
@@ -772,6 +774,8 @@ function autoCocherPrelevements(months){
 async function init(){
   // Vérifier si admin via Supabase
   await checkIsAdmin();
+  // Logger la connexion (session déjà active)
+  logConnection(getAuthedEmail());
 
   // Migration : renommer "Bio c' Bon" en "Biocoop"
   try {
@@ -2171,13 +2175,14 @@ function renderModal(modal,data,months,allKeys){
         const logs=await getConnectionLogs();
         adminContent.innerHTML="";
         const title=el("p",{style:"color:#94a3b8;font-size:12px;margin-bottom:10px;font-weight:700"});
-        title.textContent=`Connexions récentes (30 jours) — ${logs.length} entrée${logs.length>1?"s":""}`;
+        const count=Array.isArray(logs)?logs.length:0;
+        title.textContent=`Connexions récentes (30 jours) — ${count} entrée${count>1?"s":""}`;
         adminContent.appendChild(title);
-        if(!logs.length){
+        if(!count){
           const p=el("p",{style:"color:#475569;font-size:12px;text-align:center;padding:10px"});
           p.textContent="Aucune connexion enregistrée";adminContent.appendChild(p);return;
         }
-        logs.forEach(log=>{
+        (Array.isArray(logs)?logs:[]).forEach(log=>{
           const row=div("");row.style.cssText="padding:8px 0;border-bottom:1px solid #1e3a5f";
           const date=new Date(log.connected_at);
           const dateStr=date.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+date.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
@@ -3093,8 +3098,6 @@ window.addEventListener("beforeunload",()=>{
           setSession({access_token:accessToken,refresh_token:refreshToken,expires_at:parseInt(expiresAt),user});
           localStorage.setItem(ML_EMAIL_KEY,user.email);
           window.history.replaceState(null,"",window.location.pathname);
-          // Logger la connexion
-          logConnection(user.email,accessToken);
         }
       }catch(e){console.error("Auth callback erreur:",e);}
     }
