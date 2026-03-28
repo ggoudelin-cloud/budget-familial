@@ -188,14 +188,27 @@ const _GAS={
 // ── Supabase config ──────────────────────────────────────────────────────────
 const SUPABASE_URL="https://gvfejwdanvwfhtsunhsu.supabase.co";
 const SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2ZmVqd2RhbnZ3Zmh0c3VuaHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MzE0MjksImV4cCI6MjA5MDIwNzQyOX0.1NS9hT8YNI7cYSrY2Fm2doaSiWIuIloJSvwfPqy6o3A";
-const SUPABASE_HEADERS={"apikey":SUPABASE_KEY,"Authorization":"Bearer "+SUPABASE_KEY,"Content-Type":"application/json"};
-const PIN_KEY="bf-pin",PIN_AUTH_KEY="bf-pin-auth",PIN_TRIES_KEY="bf-pin-tries",PIN_BLOCK_KEY="bf-pin-block";
-const AUTH_DURATION=30*60*1000,MAX_TRIES=3,BLOCK_DURATION=3*60*1000;
-const TOTAL_TRIES_KEY="bf-total-tries";
-const MAX_TOTAL_TRIES=10; // blocage permanent après 10 tentatives au total
-function getTotalTries(){return parseInt(localStorage.getItem(TOTAL_TRIES_KEY)||"0");}
-function incTotalTries(){localStorage.setItem(TOTAL_TRIES_KEY,String(getTotalTries()+1));}
-function isPermBlocked(){return getTotalTries()>=MAX_TOTAL_TRIES;}
+const SUPABASE_HEADERS={"apikey":SUPABASE_KEY,"Content-Type":"application/json"};
+function getAuthHeaders(){
+  const s=getSession();
+  const token=s?.access_token||SUPABASE_KEY;
+  return{...SUPABASE_HEADERS,"Authorization":"Bearer "+token};
+}
+// ── Magic Link Auth ──────────────────────────────────────────────────────────
+const ALLOWED_EMAILS=["goudelin.gilles@hotmail.com","murielle1973@hotmail.fr"];
+const ML_SESSION_KEY="bf-ml-session";
+const ML_EMAIL_KEY="bf-ml-email";
+function getSession(){try{const s=localStorage.getItem(ML_SESSION_KEY);if(s)return JSON.parse(s);}catch{}return null;}
+function setSession(session){localStorage.setItem(ML_SESSION_KEY,JSON.stringify(session));}
+function clearSession(){localStorage.removeItem(ML_SESSION_KEY);localStorage.removeItem(ML_EMAIL_KEY);}
+function isAuthed(){
+  const s=getSession();
+  if(!s)return false;
+  // Vérifier expiration
+  if(s.expires_at&&Date.now()>s.expires_at*1000){clearSession();return false;}
+  return true;
+}
+function getAuthedEmail(){const s=getSession();return s?.user?.email||localStorage.getItem(ML_EMAIL_KEY)||"";}
 const CATEGORIES_BASE=["logement","assurances","abonnements","crédits","vie courante","transport","enfants","animaux","autre"];
 const CAT_COLORS_EXTRA=["#6366f1","#0ea5e9","#d946ef","#f97316","#14b8a6","#a855f7","#eab308","#78716c"];
 
@@ -385,38 +398,18 @@ function getPinSalt(){
   }
   return salt;
 }
-async function hashPin(pin){
-  // PBKDF2 : résistant aux rainbow tables et au brute-force
-  const keyMaterial=await crypto.subtle.importKey(
-    "raw",new TextEncoder().encode(pin),{name:"PBKDF2"},false,["deriveBits"]
-  );
-  const saltBytes=Uint8Array.from(atob(getPinSalt()),c=>c.charCodeAt(0));
-  const bits=await crypto.subtle.deriveBits(
-    {name:"PBKDF2",salt:saltBytes,iterations:100000,hash:"SHA-256"},
-    keyMaterial,256
-  );
-  return btoa(String.fromCharCode(...new Uint8Array(bits)));
-}
-function getPinHash(){return localStorage.getItem(PIN_KEY)||null;}
-function setPinHash(hash){localStorage.setItem(PIN_KEY,hash);}
-function hasPin(){return !!localStorage.getItem(PIN_KEY);}
-async function migratePin(){
-  const stored=localStorage.getItem(PIN_KEY);
-  // Si stocké en hex SHA-256 (64 chars) ou en clair (4 chars) → migrer en PBKDF2
-  if(stored&&stored.length!==44){
-    // On ne peut pas migrer un hash SHA-256 sans le PIN original
-    // On force une nouvelle création de PIN
-    localStorage.removeItem(PIN_KEY);
-    localStorage.removeItem(PIN_AUTH_KEY);
-  }
-}
+
+
+
+
+
 function isAuthed(){const t=localStorage.getItem(PIN_AUTH_KEY);return t&&Date.now()-parseInt(t)<AUTH_DURATION;}
-function setAuthed(){localStorage.setItem(PIN_AUTH_KEY,String(Date.now()));}
-function getTries(){return parseInt(localStorage.getItem(PIN_TRIES_KEY)||"0");}
-function setTries(n){localStorage.setItem(PIN_TRIES_KEY,String(n));}
-function getBlockUntil(){return parseInt(localStorage.getItem(PIN_BLOCK_KEY)||"0");}
-function setBlock(){localStorage.setItem(PIN_BLOCK_KEY,String(Date.now()+BLOCK_DURATION));}
-function clearBlock(){localStorage.removeItem(PIN_BLOCK_KEY);localStorage.removeItem(PIN_TRIES_KEY);}
+
+
+
+
+
+
 
 const BASE=[
   {type:"Loyer",montant:929.99,categorie:"logement"},{type:"Gaz",montant:200.00,categorie:"logement"},
@@ -521,7 +514,7 @@ const DB={
       try{
         const r=await fetch(
           `${SUPABASE_URL}/rest/v1/budget?user_id=eq.shared&select=data,meta&limit=1`,
-          {headers:SUPABASE_HEADERS}
+          {headers:getAuthHeaders()}
         );
         const rows=await r.json();
         if(rows&&rows.length>0){
@@ -596,7 +589,7 @@ const DB={
         `${SUPABASE_URL}/rest/v1/budget?user_id=eq.shared`,
         {
           method:"PATCH",
-          headers:{...SUPABASE_HEADERS,"Prefer":"return=minimal"},
+          headers:{...getAuthHeaders(),"Prefer":"return=minimal"},
           body:JSON.stringify({data:months, meta:_meta||{}, updated_at:new Date().toISOString()})
         }
       );
@@ -621,10 +614,8 @@ const DB={
 
 // STATE
 let STATE={
-  screen:"pin", // "pin" | "setup" | "app"
-  setupStep:0,setupPin:"",setupConfirm:"",setupInput:"",setupError:"",
-  pinInput:"",pinError:"",pinShake:false,pinBlocked:false,pinBlockLeft:0,
-  changePinStep:0,changePinOld:"",changePinNew:"",changePinInput:"",changePinError:"",
+  screen:"login", // "login" | "magic-sent" | "app"
+  loginEmail:"",loginError:"",loginLoading:false,
   months:{},curKey:nowKey(),tab:"dashboard",loading:true,lastSync:null,
   modal:null,filtre:"toutes",monthPick:false,toast:null,toastTimer:null,
   openCourseId:null,
@@ -838,126 +829,7 @@ async function createMonth(key,copyKey){
 }
 
 // PIN logic
-function updatePinDots(error=false){
-  const dots=document.querySelectorAll(".pin-dot");
-  if(!dots.length){render();return;}
-  dots.forEach((dot,i)=>{
-    dot.className="pin-dot";
-    if(STATE.pinInput.length>i)dot.classList.add(error?"error":"filled");
-  });
-  const errEl=document.querySelector(".pin-error");
-  if(errEl)errEl.textContent=STATE.pinError||"";
-}
-function handlePinDigit(d){
-  if(STATE.pinBlocked)return;
-  if(isPermBlocked()){
-    STATE.pinBlocked=true;STATE.pinBlockLeft="définitivement bloqué";
-    render();return;
-  }
-  const val=STATE.pinInput+d;
-  STATE.pinInput=val;STATE.pinError="";
-  updatePinDots();
-  if(val.length===4){
-    if(Date.now()<getBlockUntil()){STATE.pinBlocked=true;STATE.pinInput="";render();startBlockTimer();return;}
-    hashPin(val).then(hash=>{
-      if(hash===getPinHash()){
-        clearBlock();setAuthed();STATE.pinInput="";STATE.pinError="";
-        setState({screen:"app"});init();
-      } else {
-      const tries=getTries()+1;setTries(tries);const left=MAX_TRIES-tries;
-      if(tries>=MAX_TRIES){
-        setBlock();STATE.pinInput="";STATE.pinError="";STATE.pinBlocked=true;
-        render();startBlockTimer();
-      } else {
-        incTotalTries();
-        STATE.pinInput="";
-        STATE.pinError=`Code incorrect — ${left} essai${left>1?"s":""} restant${left>1?"s":""}`;
-        updatePinDots(true);
-        setTimeout(()=>{STATE.pinError="";updatePinDots();},800);
-      }
-    }
-    }); // fin hashPin
-  }
-}
-function handlePinDel(){
-  STATE.pinInput=STATE.pinInput.slice(0,-1);
-  STATE.pinError="";
-  updatePinDots();
-}
-function startBlockTimer(){
-  // Annuler tout timer précédent
-  if(window._blockTimer)clearInterval(window._blockTimer);
-  window._blockTimer=setInterval(()=>{
-    const left=Math.ceil((getBlockUntil()-Date.now())/1000);
-    if(left<=0){
-      clearInterval(window._blockTimer);window._blockTimer=null;
-      clearBlock();
-      STATE.pinBlocked=false;STATE.pinBlockLeft="";STATE.pinError="";
-      render();
-    } else {
-      const mins=Math.floor(left/60);
-      const secs=left%60;
-      const display=mins>0?`${mins}m ${String(secs).padStart(2,"0")}s`:`${secs}s`;
-      STATE.pinBlockLeft=display;
-      // Mettre à jour uniquement le texte si l'élément existe
-      const el=document.getElementById("pin-countdown");
-      if(el) el.textContent=`🔒 Accès bloqué — réessayez dans ${display}`;
-    }
-  },1000);
-}
-function updateChangePinDots(){
-  const dots=document.querySelectorAll("#change-pin-dots .pin-dot");
-  if(!dots.length)return;
-  dots.forEach((dot,i)=>{
-    dot.className="pin-dot";
-    if(STATE.changePinInput.length>i)dot.classList.add("filled");
-  });
-  const errEl=document.getElementById("change-pin-err");
-  if(errEl)errEl.textContent=STATE.changePinError||"";
-  const stepEl=document.getElementById("change-pin-step");
-  if(stepEl){
-    const steps=["","Entrez votre code actuel","Entrez le nouveau code","Confirmez le nouveau code"];
-    stepEl.textContent=steps[STATE.changePinStep]||"";
-  }
-}
-function handleChangePinDigit(d){
-  if(STATE.changePinStep===0)return;
-  const val=STATE.changePinInput+d;
-  STATE.changePinInput=val;STATE.changePinError="";
-  updateChangePinDots();
-  if(val.length===4){
-    if(STATE.changePinStep===1){
-      // Hasher val et comparer avec le hash stocké
-      hashPin(val).then(hash=>{
-        if(hash===getPinHash()){
-          STATE.changePinStep=2;STATE.changePinOld=val;STATE.changePinInput="";
-        } else {
-          STATE.changePinInput="";STATE.changePinError="Code actuel incorrect";
-        }
-        updateChangePinDots();
-      });
-    }
-    else if(STATE.changePinStep===2){
-      STATE.changePinStep=3;STATE.changePinNew=val;STATE.changePinInput="";
-      updateChangePinDots();
-    }
-    else if(STATE.changePinStep===3){
-      if(val===STATE.changePinNew){
-        hashPin(val).then(h=>{setPinHash(h);});
-        STATE.changePinStep=0;STATE.changePinInput="";STATE.changePinError="";
-        setState({modal:null});notify("✓ Code PIN modifié !");
-      } else {
-        STATE.changePinInput="";STATE.changePinError="Les codes ne correspondent pas";
-        updateChangePinDots();
-      }
-    }
-  }
-}
-function handleChangePinDel(){
-  STATE.changePinInput=STATE.changePinInput.slice(0,-1);
-  STATE.changePinError="";
-  updateChangePinDots();
-}
+
 
 // Render helpers
 function el(tag,attrs={},...ch){
@@ -980,110 +852,90 @@ function render(){
   // Mémoriser la position de scroll pour la restaurer après render
   const scrollY=window.scrollY||document.documentElement.scrollTop;
   const root=document.getElementById("root");root.innerHTML="";
-  if(STATE.screen==="setup"){root.appendChild(renderSetup());return;}
-  if(STATE.screen==="pin"){root.appendChild(renderPin());return;}
+  if(STATE.screen==="login"){root.appendChild(renderLogin());return;}
+  if(STATE.screen==="magic-sent"){root.appendChild(renderMagicSent());return;}
   if(STATE.loading){root.appendChild(div("loader",div("spinner"),el("p",{style:"color:#94a3b8;margin-top:14px"},"Chargement…")));return;}
   root.appendChild(renderApp());
   // Restaurer la position de scroll
   if(scrollY>0) requestAnimationFrame(()=>window.scrollTo(0,scrollY));
 }
 
-// SETUP SCREEN — création du PIN au premier lancement
-function renderSetup(){
+// ── ÉCRAN CONNEXION MAGIC LINK ────────────────────────────────────────────────
+function renderLogin(){
   const wrap=div("pin-screen");
-  const steps=["","Choisissez votre code PIN (4 chiffres)","Confirmez votre code PIN"];
   wrap.append(
     el("div",{className:"pin-logo"},"💶"),
     el("h2",{className:"pin-title"},"Budget Familial"),
-    el("p",{className:"pin-sub",style:"color:#10B981;font-weight:700"},"🔐 Premier lancement"),
-    el("p",{className:"pin-sub"},(steps[STATE.setupStep+1]||"Choisissez votre PIN"))
+    el("p",{className:"pin-sub"},"Connectez-vous avec votre email")
   );
-  const dots=div("pin-dots");
-  for(let i=0;i<4;i++){
-    const d=div("pin-dot");
-    if(STATE.setupInput.length>i)d.classList.add("filled");
-    dots.appendChild(d);
-  }
-  wrap.appendChild(dots);
-  const err=el("p",{className:"pin-error"});err.textContent=STATE.setupError||"";wrap.appendChild(err);
-  const grid=div("pin-grid");
-  ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
-    if(d===""){grid.appendChild(div("pin-btn empty"));return;}
-    const b=div("pin-btn"+(d==="⌫"?" del":""));b.textContent=d;
-    b.onclick=()=>d==="⌫"?handleSetupDel():handleSetupDigit(d);
-    grid.appendChild(b);
-  });
-  wrap.appendChild(grid);
+  const form=div("");form.style.cssText="display:flex;flex-direction:column;gap:12px;width:100%;max-width:300px;margin-top:16px";
+  const inp=el("input",{type:"email",placeholder:"votre@email.com",value:STATE.loginEmail||""});
+  inp.style.cssText="background:#0f172a;border:1px solid #334155;border-radius:10px;padding:12px 16px;color:#f1f5f9;font-size:15px;outline:none";
+  inp.oninput=e=>{STATE.loginEmail=e.target.value;STATE.loginError="";};
+  inp.onkeydown=e=>{if(e.key==="Enter")sendMagicLink();};
+  const err=el("p",{});err.style.cssText="color:#EF4444;font-size:12px;min-height:16px;text-align:center";
+  err.textContent=STATE.loginError||"";
+  const btn=el("button",{type:"button"});
+  btn.textContent=STATE.loginLoading?"⏳ Envoi en cours...":"📧 Envoyer le lien de connexion";
+  btn.style.cssText="background:#3B82F6;border:none;color:#fff;border-radius:10px;padding:13px;font-weight:800;font-size:14px;cursor:pointer";
+  btn.disabled=STATE.loginLoading;
+  btn.onclick=sendMagicLink;
+  form.append(inp,err,btn);
+  wrap.appendChild(form);
+  const note=el("p",{});note.style.cssText="color:#475569;font-size:11px;margin-top:20px;text-align:center";
+  note.textContent="Un lien de connexion sécurisé sera envoyé à votre adresse email";
+  wrap.appendChild(note);
   return wrap;
 }
-function updateSetupDots(){
-  const dots=document.querySelectorAll(".pin-screen .pin-dot");
-  if(!dots.length)return;
-  dots.forEach((dot,i)=>{dot.className="pin-dot";if(STATE.setupInput.length>i)dot.classList.add("filled");});
-  const errEl=document.querySelector(".pin-screen .pin-error");
-  if(errEl)errEl.textContent=STATE.setupError||"";
-}
-function handleSetupDigit(d){
-  const val=STATE.setupInput+d;
-  STATE.setupInput=val;STATE.setupError="";
-  updateSetupDots();
-  if(val.length===4){
-    if(STATE.setupStep===0){
-      // Étape 1 : saisie du PIN
-      STATE.setupPin=val;STATE.setupStep=1;STATE.setupInput="";
-      render(); // recrée l'écran avec le nouveau message
-    } else {
-      // Étape 2 : confirmation
-      if(val===STATE.setupPin){
-        hashPin(val).then(hash=>{
-          setPinHash(hash);
-          setAuthed();
-          STATE.setupStep=0;STATE.setupInput="";STATE.setupError="";
-          setState({screen:"app"});
-          init();
-          notify("✅ Code PIN créé !");
-        });
-      } else {
-        STATE.setupStep=0;STATE.setupPin="";STATE.setupInput="";
-        STATE.setupError="Les codes ne correspondent pas — recommencez";
-        render();
-      }
-    }
-  }
-}
-function handleSetupDel(){
-  STATE.setupInput=STATE.setupInput.slice(0,-1);
-  updateSetupDots();
-}
 
-// PIN SCREEN
-function renderPin(){
+function renderMagicSent(){
   const wrap=div("pin-screen");
-  // Empêcher l'autocomplete du navigateur
-  const noAuto=el("input",{type:"password",autocomplete:"off",style:"display:none",tabindex:"-1"});wrap.appendChild(noAuto);
-  if(STATE.pinShake)wrap.style.animation="shake .4s";
-  else if(STATE.pinBlocked)wrap.style.animation="none";
-  wrap.append(el("div",{className:"pin-logo"},"💶"),el("h2",{className:"pin-title"},"Budget Familial"),el("p",{className:"pin-sub"},"Entrez votre code PIN"));
-  const dots=div("pin-dots");
-  for(let i=0;i<4;i++){const d=div("pin-dot");if(STATE.pinInput.length>i)d.classList.add(STATE.pinError?"error":"filled");dots.appendChild(d);}
-  wrap.appendChild(dots);
-  const err=el("p",{className:"pin-error"});err.textContent=STATE.pinError||"";wrap.appendChild(err);
-  if(STATE.pinBlocked){
-    const bl=el("p",{className:"pin-blocked",id:"pin-countdown"});
-    bl.textContent=`🔒 Accès bloqué — réessayez dans ${STATE.pinBlockLeft||"..."}`;
-    wrap.appendChild(bl);
-  }
-  else{
-    const grid=div("pin-grid");
-    ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
-      if(d===""){grid.appendChild(div("pin-btn empty"));return;}
-      const b=div("pin-btn"+(d==="⌫"?" del":""));b.textContent=d;b.onclick=()=>d==="⌫"?handlePinDel():handlePinDigit(d);grid.appendChild(b);
-    });
-    wrap.appendChild(grid);
-  }
+  wrap.append(
+    el("div",{className:"pin-logo"},"📧"),
+    el("h2",{className:"pin-title"},"Email envoyé !"),
+    el("p",{className:"pin-sub",style:"color:#10B981;font-weight:700"},"Vérifiez votre boîte mail"),
+    el("p",{className:"pin-sub"},"Cliquez sur le lien reçu à :"),
+    el("p",{className:"pin-sub",style:"color:#3B82F6;font-weight:700"},(STATE.loginEmail||""))
+  );
+  const note=el("p",{});note.style.cssText="color:#475569;font-size:11px;margin-top:20px;text-align:center;padding:0 20px";
+  note.textContent="Le lien est valable 1 heure. Vérifiez aussi vos spams si vous ne le recevez pas.";
+  wrap.appendChild(note);
+  const back=el("button",{type:"button"});
+  back.textContent="← Retour";
+  back.style.cssText="background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:10px;padding:10px 20px;font-size:13px;cursor:pointer;margin-top:20px";
+  back.onclick=()=>setState({screen:"login",loginError:""});
+  wrap.appendChild(back);
   return wrap;
 }
 
+async function sendMagicLink(){
+  const email=(STATE.loginEmail||"").trim().toLowerCase();
+  if(!email){STATE.loginError="Veuillez saisir votre email";render();return;}
+  if(!ALLOWED_EMAILS.includes(email)){
+    STATE.loginError="Cet email n'est pas autorisé à accéder à l'application";render();return;
+  }
+  STATE.loginLoading=true;STATE.loginError="";render();
+  try{
+    const r=await fetch(`${SUPABASE_URL}/auth/v1/magiclink`,{
+      method:"POST",
+      headers:{...SUPABASE_HEADERS,"Content-Type":"application/json"},
+      body:JSON.stringify({email,options:{emailRedirectTo:"https://ggoudelin-cloud.github.io/budget-familial/"}})
+    });
+    if(r.ok||r.status===200){
+      STATE.loginLoading=false;
+      setState({screen:"magic-sent"});
+    } else {
+      const err=await r.json();
+      STATE.loginLoading=false;
+      STATE.loginError="Erreur : "+(err.msg||err.message||"Réessayez");
+      render();
+    }
+  }catch(e){
+    STATE.loginLoading=false;
+    STATE.loginError="Erreur réseau — vérifiez votre connexion";
+    render();
+  }
+}
 // APP
 function renderApp(){
   const{months,curKey,tab,lastSync,toast,modal,monthPick}=STATE;
@@ -1114,8 +966,23 @@ function renderApp(){
   si.innerHTML=`<span class="sync-dot" style="background:${syncColor}"></span>${syncText}`;
   tWrap.append(el("h1",{},"💶 Budget Familial"),si);
   const hbtns=div("hbtns");
-  const lockB=el("button",{className:"icon-btn",title:"Verrouiller"});lockB.textContent="🔒";lockB.onclick=()=>{localStorage.removeItem(PIN_AUTH_KEY);setState({screen:"pin",pinInput:"",pinError:""});};
-  const pinB=el("button",{className:"icon-btn",title:"Changer PIN"});pinB.textContent="🔑";pinB.onclick=()=>setState({modal:{type:"changePin"},changePinStep:1,changePinInput:"",changePinError:""});
+  const lockB=el("button",{className:"icon-btn",title:"Se déconnecter"});lockB.textContent="🔒";lockB.onclick=async()=>{
+    // Déconnecter de Supabase
+    try{
+      const s=getSession();
+      if(s?.access_token){
+        await fetch(`${SUPABASE_URL}/auth/v1/logout`,{
+          method:"POST",
+          headers:{...SUPABASE_HEADERS,"Authorization":"Bearer "+s.access_token}
+        });
+      }
+    }catch{}
+    clearSession();
+    setState({screen:"login",loginEmail:"",loginError:""});
+  };
+  const pinB=el("button",{className:"icon-btn",title:"Email connecté"});
+  pinB.textContent="👤";
+  pinB.onclick=()=>notify("Connecté : "+getAuthedEmail());
   const refB=el("button",{className:"icon-btn",title:"Actualiser / Synchroniser"});refB.textContent="⟳";
   refB.onclick=async()=>{
     notify("⏳ Synchronisation...");
@@ -2241,27 +2108,6 @@ function renderModal(modal,data,months,allKeys){
     btns.append(sv,ca);m.appendChild(btns);
   }
 
-  // ── Changer PIN ──
-  else if(modal.type==="changePin"){
-    const steps=["","Entrez votre code actuel","Entrez le nouveau code","Confirmez le nouveau code"];
-    m.appendChild(el("h2",{className:"mt"},"🔑 Changer le code PIN"));
-    const step=el("p",{id:"change-pin-step",style:"font-size:13px;color:#94a3b8;margin-bottom:12px"});
-    step.textContent=steps[STATE.changePinStep]||"";m.appendChild(step);
-    const dots=div("pin-dots");dots.id="change-pin-dots";dots.style.cssText="justify-content:center;margin-bottom:20px";
-    for(let i=0;i<4;i++){const d=div("pin-dot");if(STATE.changePinInput.length>i)d.classList.add("filled");dots.appendChild(d);}
-    m.appendChild(dots);
-    const err=el("p",{id:"change-pin-err",style:"color:#EF4444;font-size:13px;font-weight:700;min-height:20px;margin-bottom:12px;text-align:center"});
-    err.textContent=STATE.changePinError||"";m.appendChild(err);
-    const grid=div("pin-grid");grid.style.margin="0 auto";
-    ["1","2","3","4","5","6","7","8","9","","0","⌫"].forEach(d=>{
-      if(d===""){grid.appendChild(div("pin-btn empty"));return;}
-      const b=div("pin-btn"+(d==="⌫"?" del":""));b.textContent=d;b.onclick=e=>{e.stopPropagation();d==="⌫"?handleChangePinDel():handleChangePinDigit(d);};grid.appendChild(b);
-    });
-    m.appendChild(grid);
-    const ca=el("button",{className:"b-can",style:"margin-top:20px;width:100%"});ca.textContent="Annuler";
-    ca.onclick=()=>setState({modal:null,changePinStep:0,changePinInput:""});m.appendChild(ca);
-  }
-
   // ── Edit / Add ──
   else if(modal.type==="edit"||modal.type==="add"){
     // Conserver STATE.modalItem si même modal déjà ouvert — évite la perte de saisie
@@ -3023,14 +2869,39 @@ window.addEventListener("beforeunload",()=>{
   if(_pendingSave) DB.sendSync(_pendingSave);
 });
 (async()=>{
-  // Supabase — pas besoin de déchiffrer une URL
-  await migratePin();
-  if(!hasPin()){
-    setState({screen:"setup",setupStep:0,setupInput:"",setupError:""});
-  } else if(isAuthed()){
+  // Vérifier si Magic Link callback (hash dans l'URL)
+  const hash=window.location.hash;
+  if(hash&&hash.includes("access_token")){
+    // Extraire le token du hash
+    const params=new URLSearchParams(hash.substring(1));
+    const accessToken=params.get("access_token");
+    const refreshToken=params.get("refresh_token");
+    const expiresAt=params.get("expires_at");
+    if(accessToken){
+      // Récupérer les infos utilisateur
+      try{
+        const r=await fetch(`${SUPABASE_URL}/auth/v1/user`,{
+          headers:{...SUPABASE_HEADERS,"Authorization":"Bearer "+accessToken}
+        });
+        const user=await r.json();
+        if(user&&user.email){
+          if(!ALLOWED_EMAILS.includes(user.email)){
+            document.getElementById("root").innerHTML=`<div style="padding:40px;text-align:center;color:#EF4444;font-family:sans-serif"><h2>Accès refusé</h2><p>${user.email} n'est pas autorisé.</p></div>`;
+            return;
+          }
+          setSession({access_token:accessToken,refresh_token:refreshToken,expires_at:parseInt(expiresAt),user});
+          localStorage.setItem(ML_EMAIL_KEY,user.email);
+          // Nettoyer l'URL
+          window.history.replaceState(null,"",window.location.pathname);
+        }
+      }catch(e){console.error("Auth callback erreur:",e);}
+    }
+  }
+
+  if(isAuthed()){
     setState({screen:"app"});init();
   } else {
-    setState({screen:"pin"});
+    setState({screen:"login"});
   }
 })();
 </script>
