@@ -621,6 +621,7 @@ const DB={
 let STATE={
   screen:"login", // "login" | "magic-sent" | "app"
   loginEmail:"",loginError:"",loginLoading:false,
+  moisSub:"resume", // "resume" | "depenses" | "courses"
   months:{},curKey:nowKey(),tab:"mois",loading:true,lastSync:null,
   modal:null,filtre:"toutes",monthPick:false,toast:null,toastTimer:null,
   openCourseId:null,
@@ -1174,9 +1175,21 @@ function renderApp(){
 
   const main=el("main",{});
   if(tab==="mois"){
-    main.appendChild(renderDashboard(data,totSal,totDep,totEco,paye,solde));
-    main.appendChild(renderDepenses(data));
-    main.appendChild(renderAlimentationCard(data));
+    // Sous-onglets Résumé / Dépenses / Courses
+    const moisSub=STATE.moisSub||"resume";
+    const subBar=div("");subBar.style.cssText="display:flex;gap:6px;padding:0 0 10px 0";
+    [["resume","📊 Résumé"],["depenses","💸 Dépenses"],["courses","🛒 Courses"]].forEach(([id,label])=>{
+      const b=el("button",{type:"button"});
+      b.textContent=label;
+      const isOn=moisSub===id;
+      b.style.cssText=`flex:1;padding:8px 4px;border-radius:10px;font-weight:700;font-size:12px;cursor:pointer;border:none;background:${isOn?"#1d4ed8":"#1e293b"};color:${isOn?"#fff":"#64748b"}`;
+      b.onclick=()=>setState({moisSub:id});
+      subBar.appendChild(b);
+    });
+    main.appendChild(subBar);
+    if(moisSub==="resume") main.appendChild(renderDashboard(data,totSal,totDep,totEco,paye,solde));
+    if(moisSub==="depenses") main.appendChild(renderDepenses(data));
+    if(moisSub==="courses") main.appendChild(renderAlimentationCard(data));
   }
   if(tab==="analyse"){
     main.appendChild(renderHistorique(months,allKeys));
