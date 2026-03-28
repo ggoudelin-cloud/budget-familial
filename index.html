@@ -195,7 +195,7 @@ function getAuthHeaders(){
   return{...SUPABASE_HEADERS,"Authorization":"Bearer "+token};
 }
 // ── Magic Link Auth ──────────────────────────────────────────────────────────
-const ALLOWED_EMAILS=["goudelin.gilles@hotmail.com","murielle1973@hotmail.fr"];
+const ALLOWED_EMAILS=[]; // emails vérifiés côté Supabase uniquement
 const ML_SESSION_KEY="bf-ml-session";
 const ML_EMAIL_KEY="bf-ml-email";
 function getSession(){try{const s=localStorage.getItem(ML_SESSION_KEY);if(s)return JSON.parse(s);}catch{}return null;}
@@ -916,9 +916,8 @@ function renderMagicSent(){
 async function sendMagicLink(){
   const email=(STATE.loginEmail||"").trim().toLowerCase();
   if(!email){STATE.loginError="Veuillez saisir votre email";render();return;}
-  if(!ALLOWED_EMAILS.includes(email)){
-    STATE.loginError="Cet email n'est pas autorisé à accéder à l'application";render();return;
-  }
+  // Vérification email côté Supabase (table allowed_emails)
+  // On envoie le lien — Supabase bloquera si l'email n'est pas autorisé
   STATE.loginLoading=true;STATE.loginError="";render();
   try{
     const r=await fetch(`${SUPABASE_URL}/auth/v1/otp`,{
@@ -2899,10 +2898,7 @@ window.addEventListener("beforeunload",()=>{
         });
         const user=await r.json();
         if(user&&user.email){
-          if(!ALLOWED_EMAILS.includes(user.email)){
-            document.getElementById("root").innerHTML=`<div style="padding:40px;text-align:center;color:#EF4444;font-family:sans-serif;background:#0f172a;min-height:100vh"><h2>Accès refusé</h2><p>${user.email} n'est pas autorisé.</p></div>`;
-            return;
-          }
+          // Accès vérifié côté Supabase via RLS
           setSession({access_token:accessToken,refresh_token:refreshToken,expires_at:parseInt(expiresAt),user});
           localStorage.setItem(ML_EMAIL_KEY,user.email);
           // Nettoyer l'URL
