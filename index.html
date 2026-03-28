@@ -213,10 +213,19 @@ function getAuthedEmail(){const s=getSession();return s?.user?.email||localStora
 // Vérifier si l'utilisateur est admin via Supabase
 async function checkIsAdmin(){
   try{
-    const r=await fetch(`${SUPABASE_URL}/rest/v1/admin_emails?email=eq.${encodeURIComponent(getAuthedEmail())}&select=email&limit=1`,{headers:getAuthHeaders()});
+    const email=getAuthedEmail();
+    const headers=getAuthHeaders();
+    console.log("[admin] email:", email, "token:", headers.Authorization?.substring(0,40));
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/admin_emails?email=eq.${encodeURIComponent(email)}&select=email&limit=1`,{headers});
+    console.log("[admin] status:", r.status);
     const data=await r.json();
+    console.log("[admin] data:", JSON.stringify(data));
     STATE._isAdmin=Array.isArray(data)&&data.length>0;
-  }catch{STATE._isAdmin=false;}
+    console.log("[admin] isAdmin:", STATE._isAdmin);
+  }catch(e){
+    console.error("[admin] erreur:", e.message);
+    STATE._isAdmin=false;
+  }
   return STATE._isAdmin;
 }
 
