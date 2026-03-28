@@ -1539,6 +1539,8 @@ function renderStats(months,allKeys){
 
   // Calculer les séries mensuelles
   const salaires=sorted.map(k=>months[k].salaires.reduce((a,x)=>a+(+x.montant||0),0));
+  const salMurielle=sorted.map(k=>months[k].salaires.find(x=>x.prenom==="Murielle")?.montant||0);
+  const salGilles=sorted.map(k=>months[k].salaires.find(x=>x.prenom==="Gilles")?.montant||0);
   const depenses=sorted.map(k=>months[k].depenses.reduce((a,x)=>a+(+x.montant||0),0));
   const courses=sorted.map(k=>(months[k].courses||[]).reduce((a,x)=>a+(+x.montant||0),0));
   const epargne=sorted.map(k=>months[k].economies.reduce((a,x)=>a+(+x.montant||0),0));
@@ -1549,6 +1551,8 @@ function renderStats(months,allKeys){
   const salCum=cumul(salaires);
   const depCum=cumul(depenses);
   const coursCum=cumul(courses);
+  const murCum=cumul(salMurielle);
+  const gilCum=cumul(salGilles);
 
   // Fonction de dessin courbe SVG
   function makeCurveCard(title,series,colors,legendLabels){
@@ -1698,6 +1702,14 @@ function renderStats(months,allKeys){
     ));
   }
 
+  // Graphique 3b : Salaires individuels
+  col.appendChild(makeCurveCard(
+    "💰 Salaires — Murielle & Gilles",
+    [salMurielle, salGilles, murCum, gilCum],
+    ["#EC4899","#3B82F6","#f9a8d4","#93c5fd"],
+    ["Murielle/mois","Gilles/mois","Murielle cumulé","Gilles cumulé"]
+  ));
+
   // Graphique 4 : Épargne mensuelle + cumulée
   col.appendChild(makeCurveCard(
     "🏦 Épargne mensuelle",
@@ -1736,12 +1748,14 @@ function renderHistorique(months,allKeys){
   const rowsAll=allKeys.map(k=>{
     const m=months[k];
     const sal=m.salaires.reduce((a,x)=>a+(+x.montant||0),0);
+    const salMurielle=m.salaires.find(x=>x.prenom==="Murielle")?.montant||0;
+    const salGilles=m.salaires.find(x=>x.prenom==="Gilles")?.montant||0;
     const dep=m.depenses.reduce((a,x)=>a+(+x.montant||0),0);
     const eco=m.economies.reduce((a,x)=>a+(+x.montant||0),0);
     const courses=(m.courses||[]).reduce((a,x)=>a+(+x.montant||0),0);
     const budgetAlim=m.depenses.find(d=>d.type==="Alimentation")?.montant||800;
     const pp=dep>0?Math.round((m.depenses.filter(d=>d.paye).reduce((a,x)=>a+(+x.montant||0),0)/dep)*100):0;
-    return{k,label:keyLabel(k),sal,dep,eco,solde:sal-dep-eco,pp,courses,budgetAlim};
+    return{k,label:keyLabel(k),sal,salMurielle,salGilles,dep,eco,solde:sal-dep-eco,pp,courses,budgetAlim};
   });
   const rows=rowsAll.filter(r=>r.sal>0); // uniquement les mois avec salaires
 
@@ -1754,7 +1768,23 @@ function renderHistorique(months,allKeys){
   rows.forEach(r=>{const tr=el("tr",{style:"border-top:1px solid #1e3a5f"});tr.innerHTML=`<td style="padding:7px 6px;color:#cbd5e1;font-weight:600">${r.label}</td><td style="padding:7px 6px;text-align:right;color:#10B981;font-weight:600">${fmt(r.sal)}</td><td style="padding:7px 6px;text-align:right;color:#EF4444;font-weight:600">${fmt(r.dep)}</td><td style="padding:7px 6px;text-align:right;font-weight:700;color:${r.solde>=0?"#3B82F6":"#EF4444"}">${fmt(r.solde)}</td>`;tb.appendChild(tr);});
   t.appendChild(tb);tc.appendChild(t);col.appendChild(tc);
 
-  // Alimentation historique
+  // Suivi salaires individuels
+  const sc=div("card");sc.appendChild(el("h3",{className:"ct"},"💰 Salaires par personne"));
+  const st=el("table",{style:"width:100%;border-collapse:collapse;font-size:12px"});
+  let cumMur=0,cumGil=0;
+  st.innerHTML=`<thead><tr style="color:#64748b"><th style="text-align:left;padding:4px 6px">Mois</th><th style="text-align:right;padding:4px 6px;color:#EC4899">Murielle</th><th style="text-align:right;padding:4px 6px;color:#3B82F6">Gilles</th><th style="text-align:right;padding:4px 6px">Total</th></tr></thead>`;
+  const stb=el("tbody",{});
+  rows.forEach(r=>{
+    cumMur+=r.salMurielle;cumGil+=r.salGilles;
+    const tr=el("tr",{style:"border-top:1px solid #1e3a5f"});
+    tr.innerHTML=`<td style="padding:7px 6px;color:#cbd5e1;font-weight:600">${r.label}</td><td style="padding:7px 6px;text-align:right;color:#EC4899;font-weight:600">${fmt(r.salMurielle)}</td><td style="padding:7px 6px;text-align:right;color:#3B82F6;font-weight:600">${fmt(r.salGilles)}</td><td style="padding:7px 6px;text-align:right;color:#10B981;font-weight:700">${fmt(r.sal)}</td>`;
+    stb.appendChild(tr);
+  });
+  // Ligne cumulé
+  const trCum=el("tr",{style:"border-top:2px solid #334155;background:#0f172a"});
+  trCum.innerHTML=`<td style="padding:7px 6px;color:#f1f5f9;font-weight:800">Cumulé</td><td style="padding:7px 6px;text-align:right;color:#EC4899;font-weight:800">${fmt(cumMur)}</td><td style="padding:7px 6px;text-align:right;color:#3B82F6;font-weight:800">${fmt(cumGil)}</td><td style="padding:7px 6px;text-align:right;color:#10B981;font-weight:800">${fmt(cumMur+cumGil)}</td>`;
+  stb.appendChild(trCum);
+  st.appendChild(stb);sc.appendChild(st);col.appendChild(sc);
   const ac=div("card");ac.appendChild(el("h3",{className:"ct"},"🛒 Alimentation par mois"));
   rows.forEach(r=>{
     const pct=r.budgetAlim>0?Math.min(Math.round((r.courses/r.budgetAlim)*100),100):0;
