@@ -2010,9 +2010,27 @@ function renderLivretATab(months,allKeys){
         e.stopPropagation();
         const cats=getLivretCats();
         if(cats.length<=1){notify("Impossible de supprimer la dernière catégorie","err");return;}
-        saveLivretCats(getLivretCats().filter(x=>x!==cat));
-        if(livCat===cat)livCat=getLivretCats()[0]||"Autre";
-        persist(STATE.months);renderLivCatBtns();
+        // Confirmation inline
+        const existing=livCatRow.querySelector(".livcat-del-confirm");
+        if(existing){existing.remove();return;}
+        livCatRow.querySelectorAll(".livcat-del-confirm").forEach(x=>x.remove());
+        const cf2=div("livcat-del-confirm");
+        cf2.style.cssText="width:100%;background:#1e3a5f;border:1px solid #EF4444;border-radius:8px;padding:8px 10px;margin-top:6px;display:flex;align-items:center;justify-content:space-between;gap:8px";
+        cf2.onclick=e=>e.stopPropagation();
+        const msg2=el("span",{style:"color:#fca5a5;font-size:12px;font-weight:600"});
+        msg2.textContent=`Supprimer "${cat}" ?`;
+        const oui2=el("button",{type:"button"});oui2.textContent="✓ Oui";
+        oui2.style.cssText="background:#EF4444;border:none;color:#fff;border-radius:6px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer";
+        oui2.onclick=e=>{
+          e.stopPropagation();
+          saveLivretCats(getLivretCats().filter(x=>x!==cat));
+          if(livCat===cat)livCat=getLivretCats()[0]||"Autre";
+          persist(STATE.months);cf2.remove();renderLivCatBtns();
+        };
+        const non2=el("button",{type:"button"});non2.textContent="Annuler";
+        non2.style.cssText="background:#334155;border:none;color:#94a3b8;border-radius:6px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer";
+        non2.onclick=e=>{e.stopPropagation();cf2.remove();};
+        cf2.append(msg2,oui2,non2);livCatRow.appendChild(cf2);
       };
       btn.appendChild(delCat);livCatRow.appendChild(btn);
     });
@@ -2286,12 +2304,10 @@ function renderModal(modal,data,months,allKeys){
         const nameSp=el("span",{});nameSp.textContent=c;
         btn.appendChild(nameSp);
         btn.onclick=e=>{e.stopPropagation();cf.commerce=c;renderCommerces();};
-        // ✕ sur TOUS les commerces - toujours visible sur mobile
         const del=el("span",{});del.textContent=" ✕";
         del.style.cssText=`font-size:10px;opacity:${c===cf.commerce?"0.9":"0.35"};cursor:pointer;margin-left:2px`;
         del.onclick=e=>{
           e.stopPropagation();
-          // Confirmation inline (pas de confirm() qui est bloqué sur mobile PWA)
           const existing=commerceList.querySelector(".del-confirm-wrap");
           if(existing)existing.remove();
           const confirmWrap=div("del-confirm-wrap");
