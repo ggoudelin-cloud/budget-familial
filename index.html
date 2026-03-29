@@ -1684,22 +1684,19 @@ function renderStats(months,allKeys){
     const card=div("card");
     card.appendChild(el("h3",{className:"ct"},title));
 
-    const W=340,H=160,PL=52,PR=16,PT=16,PB=32;
+    const W=340,H=170,PL=52,PR=16,PT=20,PB=32;
     const cW=W-PL-PR,cH=H-PT-PB;
     const n=sorted.length;
 
-    // Calculer min/max globaux sur toutes les séries
     const allVals=series.flat();
-    const minV=0; // toujours partir de 0 pour les courbes financières
-    const maxV=Math.max(...allVals,1); // au moins 1 pour éviter division par zéro
+    const minV=0;
+    const maxV=Math.max(...allVals,1);
     const range=maxV-minV;
 
     const xStep=n>1?cW/(n-1):cW/2;
-
     const toX=i=>PL+(n>1?i*xStep:cW/2);
     const toY=v=>PT+cH-((v-minV)/range)*cH;
 
-    // SVG
     const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
     svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
     svg.style.cssText="width:100%;height:auto;overflow:visible";
@@ -1712,69 +1709,80 @@ function renderStats(months,allKeys){
       line.setAttribute("y1",y);line.setAttribute("y2",y);
       line.setAttribute("stroke","#1e3a5f");line.setAttribute("stroke-width","0.5");
       svg.appendChild(line);
-      // Labels Y
       const txt=document.createElementNS("http://www.w3.org/2000/svg","text");
       txt.setAttribute("x",PL-4);txt.setAttribute("y",y+4);
       txt.setAttribute("text-anchor","end");txt.setAttribute("font-size","9");
       txt.setAttribute("fill","#475569");
-      const val=t*range; // minV=0 donc pas besoin d'ajouter minV
+      const val=t*range;
       txt.textContent=val>=1000?`${Math.round(val/100)/10}k`:`${Math.round(val)}`;
       svg.appendChild(txt);
     });
 
-    // Labels X (mois)
+    // Labels X — adaptatifs selon le nombre de mois
+    const MOIS_LABELS=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
     sorted.forEach((k,i)=>{
+      // Si trop de mois, afficher seulement certains labels pour éviter chevauchement
+      const showLabel = n<=6 || i===0 || i===n-1 || (n<=12&&i%2===0) || (n>12&&i%3===0);
+      if(!showLabel) return;
       const txt=document.createElementNS("http://www.w3.org/2000/svg","text");
       txt.setAttribute("x",toX(i));txt.setAttribute("y",H-6);
       txt.setAttribute("text-anchor","middle");txt.setAttribute("font-size","8");
-      txt.setAttribute("fill","#475569");
+      txt.setAttribute("fill","#64748b");
       const[y,m]=k.split("-");
-      txt.textContent=`${["J","F","M","A","M","J","J","A","S","O","N","D"][+m-1]}${y.slice(2)}`;
+      // Format selon nombre de mois
+      const label = n<=6
+        ? `${MOIS_LABELS[+m-1]} ${y.slice(2)}`  // Mar 26
+        : n<=12
+        ? `${MOIS_LABELS[+m-1]}`                  // Mar
+        : `${+m}/${y.slice(2)}`;                   // 3/26
+      txt.textContent=label;
       svg.appendChild(txt);
     });
 
-    // Dessiner les courbes
+    // Courbes
     series.forEach((data,si)=>{
-      if(n<2){return;}
-      // Zone remplie sous la courbe (première série seulement pour lisibilité)
+      if(n<2)return;
       if(si===0){
-        let area=`M${toX(0)},${PT+cH}`;
-        area+=` L${toX(0)},${toY(data[0])}`;
+        let area=`M${toX(0)},${PT+cH} L${toX(0)},${toY(data[0])}`;
         data.forEach((_,i)=>{if(i>0)area+=` L${toX(i)},${toY(data[i])}`;});
         area+=` L${toX(n-1)},${PT+cH} Z`;
         const aPath=document.createElementNS("http://www.w3.org/2000/svg","path");
-        aPath.setAttribute("d",area);
-        aPath.setAttribute("fill",colors[si]);
-        aPath.setAttribute("fill-opacity","0.08");
+        aPath.setAttribute("d",area);aPath.setAttribute("fill",colors[si]);aPath.setAttribute("fill-opacity","0.08");
         svg.appendChild(aPath);
       }
-
-      // Ligne courbe
       let d=`M${toX(0)},${toY(data[0])}`;
       data.forEach((_,i)=>{if(i>0)d+=` L${toX(i)},${toY(data[i])}`;});
       const path=document.createElementNS("http://www.w3.org/2000/svg","path");
-      path.setAttribute("d",d);
-      path.setAttribute("fill","none");
-      path.setAttribute("stroke",colors[si]);
-      path.setAttribute("stroke-width","2");
-      path.setAttribute("stroke-linecap","round");
-      path.setAttribute("stroke-linejoin","round");
+      path.setAttribute("d",d);path.setAttribute("fill","none");
+      path.setAttribute("stroke",colors[si]);path.setAttribute("stroke-width","2");
+      path.setAttribute("stroke-linecap","round");path.setAttribute("stroke-linejoin","round");
       svg.appendChild(path);
 
-      // Points
+      // Points + valeur sur le dernier point
       data.forEach((v,i)=>{
         const circle=document.createElementNS("http://www.w3.org/2000/svg","circle");
         circle.setAttribute("cx",toX(i));circle.setAttribute("cy",toY(v));
-        circle.setAttribute("r","3");circle.setAttribute("fill",colors[si]);
+        circle.setAttribute("r","3.5");circle.setAttribute("fill",colors[si]);
         circle.setAttribute("stroke","#1e293b");circle.setAttribute("stroke-width","1.5");
         svg.appendChild(circle);
+        // Valeur sur les points — seulement si peu de mois ou premier/dernier
+        const showVal=n<=6||(n<=12&&i%2===0)||i===0||i===n-1;
+        if(showVal){
+          const valTxt=document.createElementNS("http://www.w3.org/2000/svg","text");
+          valTxt.setAttribute("x",toX(i));
+          valTxt.setAttribute("y",toY(v)-7);
+          valTxt.setAttribute("text-anchor","middle");valTxt.setAttribute("font-size","8");
+          valTxt.setAttribute("fill",colors[si]);valTxt.setAttribute("font-weight","700");
+          valTxt.textContent=v>=1000?`${Math.round(v/100)/10}k`:`${Math.round(v)}`;
+          svg.appendChild(valTxt);
+        }
       });
     });
 
     card.appendChild(svg);
 
     // Légende
-    const leg=div("");leg.style.cssText="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px";
+    const leg=div("");leg.style.cssText="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px";
     series.forEach((_,si)=>{
       const item=div("");item.style.cssText="display:flex;align-items:center;gap:5px";
       const dot=div("");dot.style.cssText=`width:10px;height:10px;border-radius:50%;background:${colors[si]};flex-shrink:0`;
@@ -1783,67 +1791,45 @@ function renderStats(months,allKeys){
     });
     card.appendChild(leg);
 
-    // Valeurs du dernier mois
-    const lastDiv=div("");lastDiv.style.cssText="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;border-top:1px solid #334155;padding-top:10px";
-    series.forEach((data,si)=>{
-      const v=data[data.length-1];
-      const item=div("");item.style.cssText="flex:1;min-width:80px;text-align:center";
-      item.innerHTML=`<div style="font-size:10px;color:#64748b">${legendLabels[si]}</div><div style="font-size:13px;font-weight:800;color:${colors[si]}">${fmt(v)}</div>`;
-      lastDiv.appendChild(item);
-    });
-    card.appendChild(lastDiv);
-
     return card;
   }
 
-  // Graphique 1 : Salaires vs Dépenses vs Solde (mensuel)
+  // Graphique 1 : Salaires / Dépenses / Solde mensuel
   col.appendChild(makeCurveCard(
-    "💰 Revenus & Dépenses — mensuel",
+    "💰 Salaires, Dépenses & Solde",
     [salaires, depenses, soldes],
     ["#10B981","#EF4444","#3B82F6"],
-    ["Salaires","Dépenses","Solde"]
+    ["Salaires","Dépenses","Solde net"]
   ));
 
-  // Graphique 2 : Salaires vs Dépenses cumulés
+  // Graphique 2 : Salaires Murielle & Gilles
   col.appendChild(makeCurveCard(
-    "📈 Revenus & Dépenses — cumulés",
-    [salCum, depCum],
-    ["#10B981","#EF4444"],
-    ["Salaires cumulés","Dépenses cumulées"]
-  ));
-
-  // Graphique 3 : Courses alimentation mensuel + cumulé
-  const totalCourses=courses.reduce((a,v)=>a+v,0);
-  if(totalCourses===0){
-    const c=div("card");
-    c.innerHTML=`<h3 class="ct">🛒 Courses alimentation</h3><p style="color:#64748b;text-align:center;padding:16px 0;font-size:13px">Aucune course saisie pour le moment</p>`;
-    col.appendChild(c);
-  } else {
-    col.appendChild(makeCurveCard(
-      "🛒 Courses alimentation",
-      [courses, coursCum],
-      ["#F59E0B","#3B82F6"],
-      ["Par mois","Cumulées"]
-    ));
-  }
-
-  // Graphique 3b : Salaires individuels
-  col.appendChild(makeCurveCard(
-    "💰 Salaires — Murielle & Gilles",
+    "👥 Salaires Murielle & Gilles",
     [salMurielle, salGilles],
     ["#EC4899","#3B82F6"],
     ["Murielle","Gilles"]
   ));
 
-  // Graphique 4 : Épargne mensuelle + cumulée
+  // Graphique 3 : Courses alimentation par mois
+  const totalCourses=courses.reduce((a,v)=>a+v,0);
+  if(totalCourses>0){
+    col.appendChild(makeCurveCard(
+      "🛒 Courses alimentation par mois",
+      [courses],
+      ["#F59E0B"],
+      ["Courses"]
+    ));
+  }
+
+  // Graphique 4 : Épargne mensuelle
   col.appendChild(makeCurveCard(
     "🏦 Épargne mensuelle",
-    [epargne, cumul(epargne)],
-    ["#8B5CF6","#10B981"],
-    ["Par mois","Cumulée"]
+    [epargne],
+    ["#8B5CF6"],
+    ["Épargne"]
   ));
 
-  // Graphique 5 : Évolution Livret A
+  // Graphique 5 : Livret A
   const livretSoldes=sorted.map((k,idx)=>{
     let s=0;
     sorted.slice(0,idx+1).forEach(kk=>{
@@ -1855,10 +1841,10 @@ function renderStats(months,allKeys){
   const hasLivret=livretSoldes.some(v=>v>0);
   if(hasLivret){
     col.appendChild(makeCurveCard(
-      "🏦 Livret A — évolution",
+      "🏦 Livret A — solde & mouvements",
       [livretSoldes, livretMouvements],
       ["#F59E0B","#10B981"],
-      ["Solde cumulé","Mouvements du mois"]
+      ["Solde total","Mouvements du mois"]
     ));
   }
 
