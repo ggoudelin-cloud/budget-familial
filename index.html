@@ -1881,9 +1881,9 @@ function renderHistorique(months,allKeys){
 
   // Suivi salaires individuels
   const sc=div("card");sc.appendChild(el("h3",{className:"ct"},"💰 Salaires par personne"));
-  // Format compact pour les tableaux : 1 234 € au lieu de 1 234,00 €
-  const fmtC=n=>{const v=parseFloat(n)||0;return v>=10000?`${Math.round(v/1000*10)/10}k €`:`${Math.round(v).toLocaleString("fr-FR")} €`;};
-  const st=el("table",{style:"width:100%;border-collapse:collapse;font-size:11px"});
+  // Format : fmt() normal sous 10 000, sinon 10,3k € au dessus
+  const fmtC=n=>{const v=parseFloat(n)||0;if(v>=10000){const k=Math.round(v/100)/10;return `${k.toLocaleString("fr-FR")}k €`;}return fmt(v);};
+  const st=el("table",{style:"width:100%;border-collapse:collapse;font-size:12px"});
   let cumMur=0,cumGil=0;
   st.innerHTML=`<thead><tr style="color:#64748b"><th style="text-align:left;padding:4px 4px">Mois</th><th style="text-align:right;padding:4px 4px;color:#EC4899">Murielle</th><th style="text-align:right;padding:4px 4px;color:#3B82F6">Gilles</th><th style="text-align:right;padding:4px 4px">Total</th></tr></thead>`;
   const stb=el("tbody",{});
