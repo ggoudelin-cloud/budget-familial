@@ -1714,7 +1714,7 @@ function renderStats(months,allKeys){
       txt.setAttribute("text-anchor","end");txt.setAttribute("font-size","9");
       txt.setAttribute("fill","#475569");
       const val=t*range;
-      txt.textContent=val>=1000?`${Math.round(val/100)/10}k`:`${Math.round(val)}`;
+      txt.textContent=val>=1000?`${Math.round(val/1000*10)/10}k`:`${Math.round(val)}`;
       svg.appendChild(txt);
     });
 
@@ -1773,7 +1773,7 @@ function renderStats(months,allKeys){
           valTxt.setAttribute("y",toY(v)-7);
           valTxt.setAttribute("text-anchor","middle");valTxt.setAttribute("font-size","8");
           valTxt.setAttribute("fill",colors[si]);valTxt.setAttribute("font-weight","700");
-          valTxt.textContent=v>=1000?`${Math.round(v/100)/10}k`:`${Math.round(v)}`;
+          valTxt.textContent=v>=1000?`${Math.round(v/1000*10)/10}k`:`${Math.round(v)}`;
           svg.appendChild(valTxt);
         }
       });
@@ -1881,19 +1881,20 @@ function renderHistorique(months,allKeys){
 
   // Suivi salaires individuels
   const sc=div("card");sc.appendChild(el("h3",{className:"ct"},"💰 Salaires par personne"));
-  const st=el("table",{style:"width:100%;border-collapse:collapse;font-size:12px"});
+  // Format compact pour les tableaux : 1 234 € au lieu de 1 234,00 €
+  const fmtC=n=>{const v=parseFloat(n)||0;return v>=10000?`${Math.round(v/1000*10)/10}k €`:`${Math.round(v).toLocaleString("fr-FR")} €`;};
+  const st=el("table",{style:"width:100%;border-collapse:collapse;font-size:11px"});
   let cumMur=0,cumGil=0;
-  st.innerHTML=`<thead><tr style="color:#64748b"><th style="text-align:left;padding:4px 6px">Mois</th><th style="text-align:right;padding:4px 6px;color:#EC4899">Murielle</th><th style="text-align:right;padding:4px 6px;color:#3B82F6">Gilles</th><th style="text-align:right;padding:4px 6px">Total</th></tr></thead>`;
+  st.innerHTML=`<thead><tr style="color:#64748b"><th style="text-align:left;padding:4px 4px">Mois</th><th style="text-align:right;padding:4px 4px;color:#EC4899">Murielle</th><th style="text-align:right;padding:4px 4px;color:#3B82F6">Gilles</th><th style="text-align:right;padding:4px 4px">Total</th></tr></thead>`;
   const stb=el("tbody",{});
   rows.forEach(r=>{
     cumMur+=r.salMurielle;cumGil+=r.salGilles;
     const tr=el("tr",{style:"border-top:1px solid #1e3a5f"});
-    tr.innerHTML=`<td style="padding:7px 6px;color:#cbd5e1;font-weight:600">${r.label}</td><td style="padding:7px 6px;text-align:right;color:#EC4899;font-weight:600">${fmt(r.salMurielle)}</td><td style="padding:7px 6px;text-align:right;color:#3B82F6;font-weight:600">${fmt(r.salGilles)}</td><td style="padding:7px 6px;text-align:right;color:#10B981;font-weight:700">${fmt(r.sal)}</td>`;
+    tr.innerHTML=`<td style="padding:6px 4px;color:#cbd5e1;font-weight:600">${r.label}</td><td style="padding:6px 4px;text-align:right;color:#EC4899;font-weight:600">${fmtC(r.salMurielle)}</td><td style="padding:6px 4px;text-align:right;color:#3B82F6;font-weight:600">${fmtC(r.salGilles)}</td><td style="padding:6px 4px;text-align:right;color:#10B981;font-weight:700">${fmtC(r.sal)}</td>`;
     stb.appendChild(tr);
   });
-  // Ligne cumulé
   const trCum=el("tr",{style:"border-top:2px solid #334155;background:#0f172a"});
-  trCum.innerHTML=`<td style="padding:7px 6px;color:#f1f5f9;font-weight:800">Cumulé</td><td style="padding:7px 6px;text-align:right;color:#EC4899;font-weight:800">${fmt(cumMur)}</td><td style="padding:7px 6px;text-align:right;color:#3B82F6;font-weight:800">${fmt(cumGil)}</td><td style="padding:7px 6px;text-align:right;color:#10B981;font-weight:800">${fmt(cumMur+cumGil)}</td>`;
+  trCum.innerHTML=`<td style="padding:6px 4px;color:#f1f5f9;font-weight:800">Cumulé</td><td style="padding:6px 4px;text-align:right;color:#EC4899;font-weight:800">${fmtC(cumMur)}</td><td style="padding:6px 4px;text-align:right;color:#3B82F6;font-weight:800">${fmtC(cumGil)}</td><td style="padding:6px 4px;text-align:right;color:#10B981;font-weight:800">${fmtC(cumMur+cumGil)}</td>`;
   stb.appendChild(trCum);
   st.appendChild(stb);sc.appendChild(st);col.appendChild(sc);
   const ac=div("card");ac.appendChild(el("h3",{className:"ct"},"🛒 Alimentation par mois"));
