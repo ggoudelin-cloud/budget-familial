@@ -461,7 +461,9 @@ function getCommerces(){
 }
 
 function saveCommerces(list,silent=false){
-  try{localStorage.setItem(COMMERCES_KEY,JSON.stringify(list));}catch{}
+  // Toujours trier A→Z
+  const sorted=[...list].sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
+  try{localStorage.setItem(COMMERCES_KEY,JSON.stringify(sorted));}catch{}
   if(!silent)localStorage.setItem("bf-meta-modAt",String(Date.now()));
 }
 
@@ -471,7 +473,7 @@ function addCommerce(nom){
   const list=getCommerces();
   if(list.map(x=>x.toLowerCase()).includes(n.toLowerCase()))return false;
   list.push(n);
-  saveCommerces(list);
+  saveCommerces(list); // tri automatique A→Z inclus
   return true;
 }
 function delCommerce(nom){
