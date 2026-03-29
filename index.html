@@ -2280,65 +2280,22 @@ function renderModal(modal,data,months,allKeys){
     const commerceList=div("");commerceList.style.cssText="display:flex;flex-wrap:wrap;gap:6px";
     function renderCommerces(){
       commerceList.innerHTML="";
-      const commerces=getCommerces();
-
-      // Bouton tri A→Z
-      const triRow=div("");triRow.style.cssText="display:flex;justify-content:flex-end;margin-bottom:8px";
-      const triBtn=el("button",{type:"button"});triBtn.textContent="A→Z";
-      triBtn.style.cssText="background:#334155;border:none;color:#94a3b8;border-radius:8px;padding:5px 10px;font-weight:700;font-size:11px;cursor:pointer";
-      triBtn.onclick=e=>{
-        e.stopPropagation();
-        const sorted=[...commerces].sort((a,b)=>a.localeCompare(b,"fr",{sensitivity:"base"}));
-        saveCommerces(sorted);
-        renderCommerces();
-        notify("✓ Commerces triés A→Z");
-      };
-      triRow.appendChild(triBtn);
-      commerceList.appendChild(triRow);
-
-      commerces.forEach((c,idx)=>{
-        const row=div("");row.style.cssText="display:flex;align-items:center;gap:4px;margin-bottom:4px";
-
-        // Boutons ↑ ↓
-        const upBtn=el("button",{type:"button"});upBtn.textContent="↑";
-        upBtn.style.cssText=`background:#1e293b;border:1px solid #334155;color:${idx===0?"#1e3a5f":"#94a3b8"};border-radius:6px;padding:2px 6px;font-size:12px;cursor:${idx===0?"default":"pointer"};min-width:26px`;
-        upBtn.disabled=idx===0;
-        upBtn.onclick=e=>{
-          e.stopPropagation();
-          if(idx===0)return;
-          const arr=[...commerces];
-          [arr[idx-1],arr[idx]]=[arr[idx],arr[idx-1]];
-          saveCommerces(arr);renderCommerces();
-        };
-
-        const downBtn=el("button",{type:"button"});downBtn.textContent="↓";
-        downBtn.style.cssText=`background:#1e293b;border:1px solid #334155;color:${idx===commerces.length-1?"#1e3a5f":"#94a3b8"};border-radius:6px;padding:2px 6px;font-size:12px;cursor:${idx===commerces.length-1?"default":"pointer"};min-width:26px`;
-        downBtn.disabled=idx===commerces.length-1;
-        downBtn.onclick=e=>{
-          e.stopPropagation();
-          if(idx===commerces.length-1)return;
-          const arr=[...commerces];
-          [arr[idx],arr[idx+1]]=[arr[idx+1],arr[idx]];
-          saveCommerces(arr);renderCommerces();
-        };
-
-        // Bouton commerce (sélection)
+      getCommerces().forEach(c=>{
         const btn=div("");
-        const isSelected=c===cf.commerce;
-        btn.style.cssText=`flex:1;padding:6px 10px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${isSelected?"#3B82F6":"#334155"};background:${isSelected?"#1d4ed8":"transparent"};color:${isSelected?"#fff":"#94a3b8"};display:flex;align-items:center;justify-content:space-between;gap:4px`;
+        btn.style.cssText=`padding:6px 12px;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${c===cf.commerce?"#3B82F6":"#334155"};background:${c===cf.commerce?"#1d4ed8":"transparent"};color:${c===cf.commerce?"#fff":"#94a3b8"};transition:all .15s;display:flex;align-items:center;gap:4px`;
         const nameSp=el("span",{});nameSp.textContent=c;
         btn.appendChild(nameSp);
         btn.onclick=e=>{e.stopPropagation();cf.commerce=c;renderCommerces();};
-
-        // ✕ supprimer
-        const del=el("span",{});del.textContent="✕";
-        del.style.cssText="font-size:10px;opacity:0.5;cursor:pointer;flex-shrink:0";
+        // ✕ sur TOUS les commerces - toujours visible sur mobile
+        const del=el("span",{});del.textContent=" ✕";
+        del.style.cssText=`font-size:10px;opacity:${c===cf.commerce?"0.9":"0.35"};cursor:pointer;margin-left:2px`;
         del.onclick=e=>{
           e.stopPropagation();
+          // Confirmation inline (pas de confirm() qui est bloqué sur mobile PWA)
           const existing=commerceList.querySelector(".del-confirm-wrap");
           if(existing)existing.remove();
           const confirmWrap=div("del-confirm-wrap");
-          confirmWrap.style.cssText="width:100%;background:#1e3a5f;border:1px solid #EF4444;border-radius:8px;padding:8px 10px;margin:4px 0;display:flex;align-items:center;justify-content:space-between;gap:8px";
+          confirmWrap.style.cssText="width:100%;background:#1e3a5f;border:1px solid #EF4444;border-radius:8px;padding:8px 10px;margin-top:4px;display:flex;align-items:center;justify-content:space-between;gap:8px";
           confirmWrap.onclick=e=>e.stopPropagation();
           const msg=el("span",{style:"color:#fca5a5;font-size:12px;font-weight:600"});
           msg.textContent=`Supprimer "${c}" ?`;
@@ -2357,8 +2314,7 @@ function renderModal(modal,data,months,allKeys){
           commerceList.appendChild(confirmWrap);
         };
         btn.appendChild(del);
-        row.append(upBtn,downBtn,btn);
-        commerceList.appendChild(row);
+        commerceList.appendChild(btn);
       });
     }
     renderCommerces();
