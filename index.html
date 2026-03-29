@@ -1023,10 +1023,19 @@ function renderMagicSent(){
 async function sendMagicLink(){
   const email=(STATE.loginEmail||"").trim().toLowerCase();
   if(!email){STATE.loginError="Veuillez saisir votre email";render();return;}
-  // Vérification email côté Supabase (table allowed_emails)
-  // On envoie le lien — Supabase bloquera si l'email n'est pas autorisé
   STATE.loginLoading=true;STATE.loginError="";render();
   try{
+    // Vérifier si l'email est autorisé avant d'envoyer
+    const check=await fetch(`${SUPABASE_URL}/rest/v1/allowed_emails?email=eq.${encodeURIComponent(email)}&select=email&limit=1`,{
+      headers:{...SUPABASE_HEADERS,"Authorization":"Bearer "+SUPABASE_KEY}
+    });
+    const allowed=await check.json();
+    if(!Array.isArray(allowed)||allowed.length===0){
+      STATE.loginLoading=false;
+      STATE.loginError="❌ Cette adresse email n'est pas autorisée à accéder à l'application";
+      render();return;
+    }
+    // Email autorisé — envoyer le Magic Link
     const r=await fetch(`${SUPABASE_URL}/auth/v1/otp`,{
       method:"POST",
       headers:{...SUPABASE_HEADERS,"Content-Type":"application/json"},
